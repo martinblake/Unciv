@@ -100,6 +100,7 @@ class MapSizeNew {
 object MapShape {
     const val hexagonal = "Hexagonal"
     const val rectangular = "Rectangular"
+    const val spherical = "Spherical"
 }
 
 object MapType {

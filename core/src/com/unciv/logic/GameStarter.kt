@@ -4,6 +4,7 @@ import com.badlogic.gdx.math.Vector2
 import com.unciv.Constants
 import com.unciv.logic.civilization.*
 import com.unciv.logic.map.BFS
+import com.unciv.logic.map.MapShape
 import com.unciv.logic.map.TileInfo
 import com.unciv.logic.map.TileMap
 import com.unciv.logic.map.mapgenerator.MapGenerator
@@ -456,8 +457,12 @@ object GameStarter {
     }
 
     private fun vectorIsAtLeastNTilesAwayFromEdge(vector: Vector2, n: Int, tileMap: TileMap): Boolean {
-        // Since all maps are HEXAGONAL, the easiest way of checking if a tile is n steps away from the
-        // edge is checking the distance to the CENTER POINT
+        if (tileMap.mapParameters.shape == MapShape.spherical) {
+            // A spherical map has no edge
+            return true
+        }
+        // Since the map is otherwise HEXAGONAL, the easiest way of checking if a tile is n steps
+        // away from the edge is checking the distance to the CENTER POINT
         // Can't believe we used a dumb way of calculating this before!
         val hexagonalRadius = -tileMap.leftX
         val distanceFromCenter = HexMath.getDistance(vector, Vector2.Zero)

@@ -26,15 +26,7 @@ class MapGenerator(val ruleset: Ruleset) {
         val mapSize = mapParameters.mapSize
         val mapType = mapParameters.type
 
-        if (mapParameters.seed == 0L)
-            mapParameters.seed = System.currentTimeMillis()
-
-        randomness.seedRNG(mapParameters.seed)
-
-        val map: TileMap = if (mapParameters.shape == MapShape.rectangular)
-            TileMap(mapSize.width, mapSize.height, ruleset, mapParameters.worldWrap)
-        else
-            TileMap(mapSize.radius, ruleset, mapParameters.worldWrap)
+        val map = TileMap(mapSize, ruleset, mapParameters.shape, mapParameters.worldWrap)
 
         map.mapParameters = mapParameters
 

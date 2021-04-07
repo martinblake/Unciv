@@ -4,6 +4,8 @@ import com.badlogic.gdx.math.Vector2
 import com.unciv.Constants
 import com.unciv.logic.GameInfo
 import com.unciv.logic.HexMath
+import com.unciv.logic.HexMath3D
+import com.unciv.logic.map.MapSizeNew
 import com.unciv.logic.civilization.CivilizationInfo
 import com.unciv.models.metadata.Player
 import com.unciv.models.ruleset.Nation
@@ -24,6 +26,9 @@ class TileMap {
     @Transient
     var bottomY = 0
 
+    @Transient
+    var icosahedronEdgeLength = 0
+
     @delegate:Transient
     val maxLatitude: Float by lazy { if (values.isEmpty()) 0f else values.map { abs(it.latitude) }.maxOrNull()!! }
 
@@ -43,15 +48,36 @@ class TileMap {
     /** for json parsing, we need to have a default constructor */
     constructor()
 
-    /** generates an hexagonal map of given radius */
-    constructor(radius: Int, ruleset: Ruleset, worldWrap: Boolean = false) {
-        for (vector in HexMath.getVectorsInDistance(Vector2.Zero, radius, worldWrap))
-            tileList.add(TileInfo().apply { position = vector; baseTerrain = Constants.grassland })
+    /** generates a map of requested size and shape */
+    constructor(mapSize: MapSizeNew, ruleset: Ruleset, mapShape: String, worldWrap: Boolean = false) {
+        when (mapShape) {
+            MapShape.hexagonal -> {
+                generateHexagonalMap(mapSize.radius, worldWrap)
+            }
+            MapShape.rectangular -> {
+                generateRectangularMap(mapSize.width, mapSize.height, worldWrap)
+            }
+            MapShape.spherical -> {
+                val nTiles = HexMath.getNumberOfTilesInHexagon(mapSize.radius)
+                val edgeLength = HexMath3D.getIcosahedronEdgeLength(nTiles)
+                generateSphericalMap(edgeLength)
+            }
+            else -> Exception("Invalid mapShape '$mapShape'")
+        }
         setTransients(ruleset)
     }
 
-    /** generates a rectangular map of given width and height*/
-    constructor(width: Int, height: Int, ruleset: Ruleset, worldWrap: Boolean = false) {
+    /** generates a hexagonal map of given radius */
+    private fun generateHexagonalMap(radius: Int, worldWrap: Boolean = false) {
+        for (vector in HexMath.getVectorsInDistance(Vector2.Zero, radius, worldWrap))
+            tileList.add(TileInfo().apply {
+                position = vector;
+                baseTerrain = Constants.grassland
+            })
+    }
+
+    /** generates a rectangular map of given width and height */
+    private fun generateRectangularMap(width: Int, height: Int, worldWrap: Boolean = false) {
         // world-wrap maps must always have an even width, so round down
         val wrapAdjustedWidth = if (worldWrap && width % 2 != 0 ) width -1 else width
 
@@ -63,8 +89,15 @@ class TileMap {
                     position = HexMath.evenQ2HexCoords(Vector2(x.toFloat(), y.toFloat()))
                     baseTerrain = Constants.grassland
                 })
+    }
 
-        setTransients(ruleset)
+    /** generates a spherical map approximated by an icosahedron of given edge length */
+    private fun generateSphericalMap(edgeLength: Int) {
+        for (vector in HexMath3D.getAllVectors(edgeLength))
+            tileList.add(TileInfo().apply {
+                position = vector;
+                baseTerrain = Constants.grassland
+            })
     }
 
     fun clone(): TileMap {
@@ -328,6 +361,9 @@ class TileMap {
             tileInfo.setTerrainTransients()
             tileInfo.setUnitTransients(setUnitCivTransients)
         }
+
+        // Key dimension for spherical map shape
+        icosahedronEdgeLength = HexMath3D.getIcosahedronEdgeLength(tileList.size)
     }
 
     /**

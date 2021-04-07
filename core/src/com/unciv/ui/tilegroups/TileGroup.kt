@@ -170,7 +170,7 @@ open class TileGroup(var tileInfo: TileInfo, var tileSetStrings:TileSetStrings, 
         crosshairImage.isVisible = true
     }
 
-    private fun getTileBaseImageLocations(viewingCiv: CivilizationInfo?): List<String> {
+    fun getTileBaseImageLocations(viewingCiv: CivilizationInfo?): List<String> {
         if (viewingCiv == null && !showEntireMap) return listOf(tileSetStrings.hexagon)
         if (tileInfo.naturalWonder != null) return listOf(tileSetStrings.getTile(tileInfo.naturalWonder!!))
 

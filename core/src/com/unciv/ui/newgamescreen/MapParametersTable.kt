@@ -53,8 +53,9 @@ class MapParametersTable(
 
     private fun addMapShapeSelectBox() {
         val mapShapes = listOfNotNull(
-            MapShape.hexagonal,
-            MapShape.rectangular
+                MapShape.hexagonal,
+                MapShape.rectangular,
+                MapShape.spherical
         )
         val mapShapeSelectBox =
             TranslatedSelectBox(mapShapes, mapParameters.shape, skin)

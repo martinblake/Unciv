@@ -25,6 +25,8 @@ import com.unciv.logic.map.*
 import com.unciv.models.AttackableTile
 import com.unciv.models.UncivSound
 import com.unciv.ui.map.TileGroupMap
+import com.unciv.ui.map.TileGroupMapBase
+import com.unciv.ui.map.TileGroupMap3D
 import com.unciv.ui.tilegroups.TileGroup
 import com.unciv.ui.tilegroups.TileSetStrings
 import com.unciv.ui.tilegroups.WorldTileGroup
@@ -35,6 +37,7 @@ import kotlin.concurrent.thread
 class WorldMapHolder(internal val worldScreen: WorldScreen, internal val tileMap: TileMap): ZoomableScrollPane() {
     internal var selectedTile: TileInfo? = null
     private val tileGroups = HashMap<TileInfo, List<WorldTileGroup>>()
+    lateinit var tileGroupMap: TileGroupMapBase<WorldTileGroup>
 
     //allWorldTileGroups exists to easily access all WordTileGroups
     //since tileGroup is a HashMap of Lists and getting all WordTileGroups
@@ -60,7 +63,21 @@ class WorldMapHolder(internal val worldScreen: WorldScreen, internal val tileMap
     internal fun addTiles() {
         val tileSetStrings = TileSetStrings()
         val daTileGroups = tileMap.values.map { WorldTileGroup(worldScreen, it, tileSetStrings) }
-        val tileGroupMap = TileGroupMap(daTileGroups, worldScreen.stage.width, worldScreen.stage.height, continuousScrollingX)
+        tileGroupMap = if (tileMap.mapParameters.shape == MapShape.spherical) {
+            TileGroupMap3D(
+                    daTileGroups,
+                    worldScreen.stage.width,
+                    worldScreen.stage.height,
+                    continuousScrollingX
+            )
+        } else {
+            TileGroupMap(
+                    daTileGroups,
+                    worldScreen.stage.width,
+                    worldScreen.stage.height,
+                    continuousScrollingX
+            )
+        }
         val mirrorTileGroups = tileGroupMap.getMirrorTiles()
 
         for (tileGroup in daTileGroups) {
@@ -635,6 +652,16 @@ class WorldMapHolder(internal val worldScreen: WorldScreen, internal val tileMap
         return true
     }
 
+    override fun setScrollX(pixels: Float) {
+        super.setScrollX(pixels)
+        tileGroupMap.scrollX(pixels)
+    }
+
+    override fun setScrollY(pixels: Float) {
+        super.setScrollY(pixels)
+        tileGroupMap.scrollY(pixels)
+    }
+
     override fun zoom(zoomScale: Float) {
         super.zoom(zoomScale)
         val scale = 1 / scaleX  // don't use zoomScale itself, in case it was out of bounds and not applied
@@ -649,6 +676,7 @@ class WorldMapHolder(internal val worldScreen: WorldScreen, internal val tileMap
                     tileGroup.cityButtonLayerGroup.isTransform = true
                 tileGroup.cityButtonLayerGroup.setScale(scale)
             }
+        tileGroupMap.setZoom(zoomScale)
     }
 
     fun removeUnitActionOverlay() {

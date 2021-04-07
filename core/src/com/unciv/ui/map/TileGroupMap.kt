@@ -9,7 +9,16 @@ import com.unciv.ui.tilegroups.TileGroup
 import kotlin.math.max
 import kotlin.math.min
 
-class TileGroupMap<T: TileGroup>(tileGroups: Collection<T>, private val leftAndRightPadding: Float, private val topAndBottomPadding: Float, worldWrap: Boolean = false, tileGroupsToUnwrap: Collection<T>? = null): Group(){
+abstract class TileGroupMapBase<T: TileGroup>: Group(){
+
+    abstract fun getMirrorTiles(): HashMap<TileInfo, Pair<T, T>>
+
+    abstract fun scrollX(pixels: Float)
+    abstract fun scrollY(pixels: Float)
+    abstract fun setZoom(zoomScale: Float)
+}
+
+class TileGroupMap<T: TileGroup>(tileGroups: Collection<T>, private val leftAndRightPadding: Float, private val topAndBottomPadding: Float, worldWrap: Boolean = false, tileGroupsToUnwrap: Collection<T>? = null): TileGroupMapBase<T>() {
     var topX = -Float.MAX_VALUE
     var topY = -Float.MAX_VALUE
     var bottomX = Float.MAX_VALUE
@@ -138,7 +147,11 @@ class TileGroupMap<T: TileGroup>(tileGroups: Collection<T>, private val leftAndR
                 .scl(1f / trueGroupSize)
     }
 
-    fun getMirrorTiles(): HashMap<TileInfo, Pair<T, T>> = mirrorTileGroups
+    override fun getMirrorTiles(): HashMap<TileInfo, Pair<T, T>> = mirrorTileGroups
+
+    override fun scrollX(pixels: Float) {}
+    override fun scrollY(pixels: Float) {}
+    override fun setZoom(zoomScale: Float) {}
 
     // For debugging purposes
     override fun draw(batch: Batch?, parentAlpha: Float) { super.draw(batch, parentAlpha) }

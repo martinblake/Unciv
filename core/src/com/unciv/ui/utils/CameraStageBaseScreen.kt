@@ -41,8 +41,7 @@ open class CameraStageBaseScreen : Screen {
 
     override fun render(delta: Float) {
         Gdx.gl.glClearColor(0f, 0f, 0.2f, 1f)
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT)
-
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT or GL20.GL_DEPTH_BUFFER_BIT)
         stage.act()
         stage.draw()
     }
