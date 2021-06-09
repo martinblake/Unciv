@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion
 import com.badlogic.gdx.graphics.g3d.*
 import com.badlogic.gdx.graphics.g3d.attributes.BlendingAttribute
 import com.badlogic.gdx.graphics.g3d.attributes.TextureAttribute
+import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder
 import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder.VertexInfo
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder
 import com.badlogic.gdx.math.Vector2
@@ -73,19 +74,68 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
         modelBatch = ModelBatch()
     }
 
-    private fun getTextureCoords(region: TextureRegion): List<Vector2> {
-        val left = region.getU()
-        val right = region.getU2()
-        val bottom = region.getV2()
-        val top = region.getV2() - (right - left) * sqrt(3f) / 2f
-        return listOf(
-                Vector2(0.25f * left + 0.75f * right, top),
-                Vector2(0.75f * left + 0.25f * right, top),
-                Vector2(left, 0.5f * (bottom + top)),
-                Vector2(0.75f * left + 0.25f * right, bottom),
-                Vector2(0.25f * left + 0.75f * right, bottom),
-                Vector2(right, 0.5f * (bottom + top)),
+    private fun addTile(meshBuilder: MeshPartBuilder, centralPosition: Vector3, vertexPositions: List<Vector3>, region: TextureRegion) {
+        val textureRadius = 0.5f * (region.getU2() - region.getU())
+        val textureCenter = Vector2(
+                region.getU() + textureRadius,
+                region.getV2() - textureRadius * sqrt(3f) / 2f
         )
+        val topStretchFactor = min((textureCenter.y - region.getV()) / (region.getV2() - textureCenter.y), 2f)
+        val centralVertex = VertexInfo().setPos(centralPosition).setUV(textureCenter)
+        // Find the index of the first vertex circling anticlockwise from south
+        val firstIdx = vertexPositions.indices.maxByOrNull {
+            Vector3(0f, 0f, 1f).crs(
+                    vertexPositions[(it + vertexPositions.size - 1) % vertexPositions.size].cpy().sub(vertexPositions[it])
+            ).dot(centralPosition)
+        } ?: 0
+        // Define key texture coordinates
+        val tSE = Vector2(textureRadius, 0f).rotateDeg(60f).add(textureCenter)
+        val tE = Vector2(textureRadius, 0f).rotateDeg(0f).add(textureCenter)
+        val tNE = Vector2(textureRadius, 0f).rotateDeg(-60f).add(textureCenter)
+        val tNW = Vector2(textureRadius, 0f).rotateDeg(-120f).add(textureCenter)
+        val tW = Vector2(textureRadius, 0f).rotateDeg(180f).add(textureCenter)
+        val tSW = Vector2(textureRadius, 0f).rotateDeg(120f).add(textureCenter)
+        val tNE_outer = Vector2(textureRadius * topStretchFactor, 0f).rotateDeg(-60f).add(textureCenter)
+        val tNW_outer = Vector2(textureRadius * topStretchFactor, 0f).rotateDeg(-120f).add(textureCenter)
+        when {
+            (vertexPositions.size == 6) -> {
+                val vSE = VertexInfo().setPos(
+                        vertexPositions[firstIdx]
+                ).setUV(tSE)
+                val vE = VertexInfo().setPos(
+                        vertexPositions[(firstIdx + 1) % vertexPositions.size]
+                ).setUV(tE)
+                val vNE = VertexInfo().setPos(
+                        vertexPositions[(firstIdx + 2) % vertexPositions.size]
+                ).setUV(tNE)
+                val vNE_outer = VertexInfo().setPos(
+                        centralPosition.cpy().add(vertexPositions[(firstIdx + 2) % vertexPositions.size].cpy().sub(centralPosition).scl(topStretchFactor))
+                ).setUV(tNE_outer)
+                val vNW = VertexInfo().setPos(
+                        vertexPositions[(firstIdx + 3) % vertexPositions.size]
+                ).setUV(tNW)
+                val vNW_outer = VertexInfo().setPos(
+                        centralPosition.cpy().add(vertexPositions[(firstIdx + 3) % vertexPositions.size].cpy().sub(centralPosition).scl(topStretchFactor))
+                ).setUV(tNW_outer)
+                val vW = VertexInfo().setPos(
+                        vertexPositions[(firstIdx + 4) % vertexPositions.size]
+                ).setUV(tW)
+                val vSW = VertexInfo().setPos(
+                        vertexPositions[(firstIdx + 5) % vertexPositions.size]
+                ).setUV(tSW)
+                meshBuilder.triangle(centralVertex, vSE, vE)
+                meshBuilder.triangle(centralVertex, vE, vNE)
+                meshBuilder.triangle(centralVertex, vNE, vNW)
+                meshBuilder.triangle(centralVertex, vNW, vW)
+                meshBuilder.triangle(centralVertex, vW, vSW)
+                meshBuilder.triangle(centralVertex, vSW, vSE)
+                //meshBuilder.triangle(vE, vNE_outer, vNE)
+                meshBuilder.rect(vNE, vNE_outer, vNW_outer, vNW)
+                //meshBuilder.triangle(vNW, vNW_outer, vW)
+            }
+            (vertexPositions.size == 5) -> {}
+            else -> {}
+        }
     }
 
     fun createModelInstance(): ModelInstance {
@@ -120,25 +170,12 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
                         neighbourPositions[(it + 1) % neighbourPositions.size]
                 ).scl(
                         1f / 3f
-                )
+                ).nor().scl(position.len())
             }
             val locations = tileGroup.getTileBaseImageLocations(null)
             for (location in locations) {
                 val region = atlas.findRegion(location)
-                val textureCoords = getTextureCoords(region)
-                for (i in vertices.indices) {
-                    val v1 = VertexInfo().setPos(position).setUV(
-                            0.5f * (region.getU() + region.getU2()),
-                            0.5f * (region.getV() + region.getV2())
-                    )
-                    val v2 = VertexInfo().setPos(vertices[i]).setUV(textureCoords[i])
-                    val v3 = VertexInfo().setPos(
-                            vertices[(i + 1) % vertices.size]
-                    ).setUV(
-                            textureCoords[(i + 1) % textureCoords.size]
-                    )
-                    meshBuilder.triangle(v1, v2, v3)
-                }
+                addTile(meshBuilder, position, vertices, region)
             }
         }
         val model = modelBuilder.end()
