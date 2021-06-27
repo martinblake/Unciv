@@ -16,11 +16,9 @@ import com.badlogic.gdx.graphics.g3d.utils.MeshPartBuilder.VertexInfo
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder
 import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.math.Vector3
-import com.badlogic.gdx.scenes.scene2d.Actor
 import com.unciv.logic.HexMath3D
 import com.unciv.logic.circumradius
 import com.unciv.logic.map.TileInfo
-import com.unciv.ui.map.TileGroupMapBase
 import com.unciv.ui.tilegroups.TileGroup
 
 import kotlin.math.*
@@ -148,8 +146,7 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
                 (Usage.Position or Usage.TextureCoordinates).toLong(),
                 Material()
         )
-
-        for(tileGroup in tileGroups) {
+        for(tileGroup in tileGroups.reversed()) {
             val position = HexMath3D.hex2WorldCoords(
                     tileGroup.tileInfo.tileMap.icosahedronEdgeLength,
                     tileGroup.tileInfo.position
@@ -179,7 +176,6 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
             }
         }
         val model = modelBuilder.end()
-
         return ModelInstance(model)
     }
 

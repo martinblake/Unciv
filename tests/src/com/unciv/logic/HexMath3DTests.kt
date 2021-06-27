@@ -29,10 +29,10 @@ class HexMath3DTests {
             Assert.assertEquals(edgeLength, bottomVertex.dst(vertex), tolerance)
         }
         for (i in 0 until 5) {
-            val upperRight = upperVertices[i]
-            val upperLeft = upperVertices[(i + 1) % 5]
-            val lowerRight = lowerVertices[i]
-            val lowerLeft = lowerVertices[(i + 1) % 5]
+            val upperLeft = upperVertices[i]
+            val upperRight = upperVertices[(i + 1) % 5]
+            val lowerLeft = lowerVertices[i]
+            val lowerRight = lowerVertices[(i + 1) % 5]
 
             // Sequential upper vertices are connected
             Assert.assertEquals(edgeLength, upperLeft.dst(upperRight), tolerance)
@@ -75,9 +75,9 @@ class HexMath3DTests {
 
         val vertexCoords: List<Pair<Int, Int>> = listOf(
                 Pair(0, 0),
-                Pair(3, 6), Pair(9, 6), Pair(15, 6), Pair(21, 6), Pair(27, 6),
-                Pair(3, 9), Pair(9, 9), Pair(15, 9), Pair(21, 9), Pair(27, 9),
-                Pair(0, 15),
+                Pair(0, 9), Pair(3, 6), Pair(6, 3), Pair(9, 0), Pair(12, -3),
+                Pair(6, 12), Pair(9, 9), Pair(12, 6), Pair(15, 3), Pair(18, 0),
+                Pair(15, 12),
         )
 
         val testCoords = HexMath3D.getAllVectors(3)

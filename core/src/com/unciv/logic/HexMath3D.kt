@@ -22,11 +22,11 @@ val bottomVertex = Vector3(0f, 0f, -sqrt(goldenRatio + 2f))
 
 // Five vertices nearest the top vertex
 val upperVertices = arrayOf<Vector3>(
+    Vector3(1f / circumradius, -goldenRatio, goldenRatio / circumradius),
     Vector3(-(goldenRatio + 1) / circumradius, -1f, goldenRatio / circumradius),
     Vector3(-(goldenRatio + 1) / circumradius, 1f, goldenRatio / circumradius),
     Vector3(1f / circumradius, goldenRatio, goldenRatio / circumradius),
     Vector3(2f * goldenRatio / circumradius, 0f, goldenRatio / circumradius),
-    Vector3(1f / circumradius, -goldenRatio, goldenRatio / circumradius),
 )
 
 // Five vertices nearest the bottom vertex
@@ -46,27 +46,69 @@ fun unsignedMod(value: Float, base: Float): Float {
 }
 
 /**
+ * Return a value wrapped to the range 0 to +base.
+ */
+fun unsignedModInt(value: Int, base: Int): Int {
+    return (((value % base) + base) % base)
+}
+
+/**
  * Return a value wrapped to the range -(base / 2) to +(base / 2).
  */
 fun signedMod(value: Float, base: Float): Float {
     return unsignedMod(value + (base / 2), base) - (base / 2)
 }
 
+/**
+ * Return a value wrapped to the range -(base / 2) to +(base / 2).
+ */
+fun signedModInt(value: Int, base: Int): Int {
+    return unsignedModInt(value + (base / 2), base) - (base / 2)
+}
+
 
 /**
- * Functions for interpreting a coordinate system comprising hexagons arranged around
- * an icosahedron (with pentagons, rather than hexagons, at each vertex).
+ * A class for interpreting a coordinate system comprising hexagons arranged around an icosahedron
+ * (with pentagons, rather than hexagons, at each vertex).
  *
- * The y-component starts as zero at the north pole and increases positively with
- * decreasing latitude.  Lines of constant y-component start as rings around the north
- * pole, expand to zig-zags near the equator, then eventually converge symmetrically on
- * the south pole.
+ * The coordinate system is similar to the 2D equivalent, with x pointing in the 10 o'clock
+ * direction and y in the 2 o'clock direction, but arranged on the net of an icosahedron, as
+ * follows:
  *
- * The x-component has a range of values that increases by 5 hexagons per row near the
- * north pole, stays the same near the equator, then decreases by 5 hexagons per row
- * near the south pole.  The line of zero-x moves vertically down the centre of the first
- * 1 + 1/3 triangular faces, then proceeds to cross the equator in the 4 o'clock direction
- * in order to approach the south pole similarly along the centre of a triangular face.
+ *         .    .    .    .    .
+ *        / \  / \  / \  / \  / \
+ *       /___\/___\/___\/___\/___\
+ *       \  / \  / \  / \  / \  / \
+ *        \/___\/___\/___\/___\/___\
+ *         \  / \  / \  / \  / \  /
+ *          \/   \/   \/   \/   \/
+ *
+ * Tiles along outer edges are mapped to the western-most edge on which they would appear, and
+ * the north and south poles are mapped to the central-most vertex of the 5, as shown:
+ *
+ *                  @             @           / @ \           @             @
+ *                 __            __           \__/           __            __
+ *             __/   \       __/   \       __/   \       __/   \       __/   \
+ *           / . \__/ .    / . \__/ .    / . \__/ .    / . \__/ .    / . \__/ .
+ *           \__/   \__    \__/   \__    \__/   \__    \__/   \__    \__/   \__
+ *          /   \__/   \  /   \__/   \  /   \__/   \  /   \__/   \  /   \__/   \
+ *      / @ \__/ . \__/ @ \__/ . \__/ @ \__/ . \__/ @ \__/ . \__/ @ \__/ . \__/ @
+ *      \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__
+ *         \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \
+ *        / . \__/ . \__/ . \__/ . \__/ . \__/ . \__/ . \__/ . \__/ . \__/ . \__/ .
+ *        \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__
+ *           \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \
+ *          / @ \__/ . \__/ @ \__/ . \__/ @ \__/ . \__/ @ \__/ . \__/ @ \__/   \__/ @
+ *          \  /   \__/   \  /   \__/   \  /   \__/   \  /   \__/   \  /   \__/   \
+ *             \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/   \__/
+ *            / . \__/ .    / . \__/ .    / . \__/ .    / . \__/ .    / . \__/ .
+ *            \__/   \      \__/   \      \__/   \      \__/   \      \__/   \
+ *               \__/          \__/          \__/          \__/          \__/
+ *                @             @           / @ \           @             @
+ *                                          \  /
+ *
+ * (Note that `@` indicates vertices and `.` indicates edges, i.e. lines along which the net would
+ *  be folded to form an icosahedron)
  */
 object HexMath3D {
 
@@ -82,18 +124,122 @@ object HexMath3D {
     }
 
     /**
-     * Return the number of tiles in the given row, counting from north to south pole.
+     * Return true if the given point lies on the net of the iosohedron
      */
-    private fun getTilesPerRow(edgeLength: Int, row: Int): Int {
-        val maxRow = 5 * edgeLength
+    private fun isPointOnNet(edgeLength: Int, latitude: Int, longitude: Int): Boolean {
+        val maxLatitude = 9 * edgeLength
+        val nearSouthPole = latitude < (3 * edgeLength)
+        val nearNorthPole = latitude > (6 * edgeLength)
         return when {
-            (row == 0) -> 1  // North pole
-            (row < (2 * edgeLength)) -> (5 * row)  // Top increasing diameter section
-            (row < (3 * edgeLength)) -> (10 * edgeLength)  // Middle constant diameter section
-            (row < (5 * edgeLength)) -> (5 * (maxRow - row) )  // Bottom decreasing diameter section
-            (row == maxRow) -> 1  // South pole
-            else -> 0
+            ((latitude + longitude) % 2) != 0 -> false // Remove points that are not at the center of a hexagon
+            nearSouthPole -> {
+                val faceOffset = signedModInt(longitude, 2 * edgeLength)
+                (3 * faceOffset < latitude) && (3 * faceOffset >= -latitude)
+            }
+            nearNorthPole -> {
+                val faceOffset = signedModInt(longitude - edgeLength, 2 * edgeLength)
+                (3 * faceOffset < (maxLatitude - latitude)) && (3 * faceOffset >= -(maxLatitude - latitude))
+            }
+            else -> true
         }
+    }
+
+    private fun getMinLongitude(edgeLength: Int, latitude: Int): Int {
+        return ceil(-(4f * edgeLength) - (latitude / 3f)).toInt()
+    }
+
+    private fun getMaxLongitude(edgeLength: Int, latitude: Int): Int {
+        return ceil((6f * edgeLength) - (latitude / 3f)).toInt() - 1
+    }
+
+    private fun mapToNet(edgeLength: Int, latLong: Pair<Int, Int>, baseLatLong: Pair<Int, Int>): Pair<Int, Int> {
+        val (latitude, longitude) = latLong
+        var (baseLatitude, baseLongitude) = baseLatLong
+
+        val maxLatitude = (9 * edgeLength)
+        val isSouthPole = latitude == 0
+        val isNorthPole = latitude == maxLatitude
+
+        if (isSouthPole) return Pair(0, 0)
+        if (isNorthPole) return Pair(maxLatitude, -edgeLength)
+
+        var outputLat = latitude
+        var outputLong = longitude
+
+        if (latitude == -1) {
+            outputLat = 2
+            outputLong = 4 * edgeLength * longitude
+            baseLongitude = outputLong
+        }
+        if (latitude == -2) {
+            outputLat = 2
+            outputLong = 6 * edgeLength
+            baseLongitude = outputLong
+        }
+
+        if (latitude == maxLatitude + 1) {
+            outputLat = maxLatitude - 2
+            outputLong = 4 * edgeLength * (edgeLength + longitude) - edgeLength
+            baseLongitude = outputLong
+        }
+        if (latitude == maxLatitude + 2) {
+            outputLat = maxLatitude - 2
+            outputLong = 5 * edgeLength
+            baseLongitude = outputLong
+        }
+
+        val nearSouthPole = outputLat < (3 * edgeLength)
+        val nearNorthPole = outputLat > (6 * edgeLength)
+
+        if (nearSouthPole) {
+            val faceCenterLongitude = baseLongitude - signedModInt(baseLongitude, 2 * edgeLength)
+            val faceOffset = outputLong - faceCenterLongitude
+            val rightEdgeExcess = (3 * faceOffset) - outputLat
+            val leftEdgeExcess = (-3 * faceOffset) - outputLat
+            when {
+                (rightEdgeExcess >= 0) -> {
+                    outputLat += (rightEdgeExcess / 2)
+                    outputLong += ((2 * edgeLength) + (rightEdgeExcess / 2) - (2 * faceOffset))
+                }
+                (leftEdgeExcess > 0) -> {
+                    outputLat += (leftEdgeExcess / 2)
+                    outputLong -= ((2 * edgeLength) + (leftEdgeExcess / 2) + (2 * faceOffset))
+                }
+                else -> {/* No change required */}
+            }
+        }
+
+        if (nearNorthPole) {
+            val faceCenterLongitude = baseLongitude - signedModInt(baseLongitude - edgeLength, 2 * edgeLength)
+            val faceOffset = outputLong - faceCenterLongitude
+            val rightEdgeExcess = (3 * faceOffset) - (maxLatitude - outputLat)
+            val leftEdgeExcess = (-3 * faceOffset) - (maxLatitude - outputLat)
+            when {
+                (rightEdgeExcess >= 0) -> {
+                    outputLat -= (rightEdgeExcess / 2)
+                    outputLong += ((2 * edgeLength) + (rightEdgeExcess / 2) - (2 * faceOffset))
+                }
+                (leftEdgeExcess > 0) -> {
+                    outputLat -= (leftEdgeExcess / 2)
+                    outputLong -= ((2 * edgeLength) + (leftEdgeExcess / 2) + (2 * faceOffset))
+                }
+                else -> {/* No change required */}
+            }
+        }
+
+        val minLongitude = getMinLongitude(edgeLength, outputLat)
+        val maxLongitude = getMaxLongitude(edgeLength, outputLat)
+        when {
+            (outputLong < minLongitude) -> {
+                outputLong += (10 * edgeLength)
+            }
+            (outputLong > maxLongitude) -> {
+                outputLong -= (10 * edgeLength)
+            }
+            else -> {/* No change required */}
+        }
+
+        return Pair(outputLat, outputLong)
     }
 
     /**
@@ -101,20 +247,25 @@ object HexMath3D {
      */
     fun getAllVectors(edgeLength: Int): List<Vector2> {
         val vectors = mutableListOf<Vector2>()
-        val maxY = (5 * edgeLength)
-        for (y in 0 until (maxY + 1)) {
-            val numX = getTilesPerRow(edgeLength, y)
-            for (x in 0 until numX) {
-                vectors.add(Vector2(x.toFloat(), y.toFloat()))
+        val maxLatitude = (9 * edgeLength)
+        vectors.add(latLong2Hex(0, 0))
+        for (latitude in 1 until maxLatitude) {
+            val minLongitude = getMinLongitude(edgeLength, latitude)
+            val maxLongitude = getMaxLongitude(edgeLength, latitude)
+            for (longitude in minLongitude..maxLongitude) {
+                if (isPointOnNet(edgeLength, latitude, longitude)) {
+                    vectors.add(latLong2Hex(latitude, longitude))
+                }
             }
         }
+        vectors.add(latLong2Hex(maxLatitude, -edgeLength))
         return vectors
     }
 
     private fun interpolateVertices(edgeLength: Int, left: Vector3, right: Vector3, other: Vector3, x: Float, y: Float): Vector3 {
         val yRatio = y / (edgeLength * 1.5f)
-        val leftEdgeRatio = (1 - yRatio - x / edgeLength) * 0.5f
-        val rightEdgeRatio = (1 - yRatio + x / edgeLength) * 0.5f
+        val leftEdgeRatio = (1 - yRatio + x / edgeLength) * 0.5f
+        val rightEdgeRatio = (1 - yRatio - x / edgeLength) * 0.5f
         return (
             right.scl(leftEdgeRatio)
         ).add(
@@ -128,254 +279,102 @@ object HexMath3D {
         return position.nor().scl(circumradius)
     }
 
+    private fun hex2LatLong(hexCoords: Vector2): Pair<Int, Int> {
+        val latitude = hexCoords.x + hexCoords.y
+        val longitude = hexCoords.y - hexCoords.x
+        return Pair(latitude.roundToInt(), longitude.roundToInt())
+    }
+
+    private fun latLong2Hex(latitude: Int, longitude: Int): Vector2 {
+        val x = 0.5f * (latitude.toFloat() - longitude.toFloat())
+        val y = 0.5f * (latitude.toFloat() + longitude.toFloat())
+        return Vector2(x, y)
+    }
+
     fun hex2WorldCoords(edgeLength: Int, hexCoords: Vector2): Vector3 {
-        val tilesPerRow = getTilesPerRow(edgeLength, hexCoords.y.roundToInt())
-        val tilesPerPeriod = tilesPerRow / 5
 
-        if (hexCoords.y.roundToInt() == 0)  {
-            return projectOntoSphere(edgeLength, topVertex.cpy())
-        } else if (hexCoords.y.roundToInt() <= (2 * edgeLength)) {
-            // Calculate x displacement from the nearest face centre line, in hexagons
-            val xOffset = signedMod(hexCoords.x, tilesPerPeriod.toFloat())
+        val (latitude, longitude) = hex2LatLong(hexCoords)
 
-            // Calculate y displacement from north pole, in hexagons
-            val yOffset = hexCoords.y - (0.5f * abs(xOffset))
+        val nearSouthPole = latitude < (3 * edgeLength)
+        val nearNorthPole = latitude > (6 * edgeLength)
 
-            // Identify the horizontally neighbouring vertices for the face on which
-            // this tile is found
-            val tileIdx = (hexCoords.x / tilesPerPeriod).roundToInt()
-            val rightVertex = upperVertices[tileIdx % 5]
-            val leftVertex = upperVertices[(tileIdx + 1) % 5]
-
-            // Identify the other vertex
-            val otherVertex = if (yOffset <= (edgeLength * 1.5)) {
-                topVertex
-            } else {
-                lowerVertices[(tileIdx + 1) % 5]
-            }
-
-            // Determine whether we're above or below the horizontal edge
-            val ySignFromEdge = if (yOffset <= (edgeLength * 1.5)) {
-                +1f
-            } else {
-                -1f
-            }
-
-            // Calculate the tile position
-            return projectOntoSphere(
-                    edgeLength,
-                    interpolateVertices(
-                            edgeLength,
-                            leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
-                            xOffset, ySignFromEdge * ((edgeLength * 1.5f) - yOffset)
-                    )
-            )
-        } else if (hexCoords.y.roundToInt() <= (3 * edgeLength)) {
-            val yInSegment = hexCoords.y - (2 * edgeLength)
-
-            // Calculate x displacement from the nearest upper triangle face centre line, in hexagons
-            val xOffset = signedMod(hexCoords.x - yInSegment, tilesPerPeriod.toFloat())
-
-            // Calculate y displacement from top pentagonal edge, in hexagons
-            val yOffset = hexCoords.y - (0.5f * abs(xOffset)) - (1.5f * edgeLength)
-
-            if ((yOffset + (1.5f * abs(xOffset))) <= (1.5f * edgeLength)) {
-                // Identify the horizontally neighbouring vertices for the face on which
-                // this tile is found
-                val tileIdx = ((hexCoords.x + tilesPerRow - yInSegment) / tilesPerPeriod).roundToInt()
-                val rightVertex = upperVertices[tileIdx % 5]
-                val leftVertex = upperVertices[(tileIdx + 1) % 5]
-
-                // Identify the other vertex
-                val otherVertex = lowerVertices[(tileIdx + 1) % 5]
-
-                // Calculate the tile position
-                return projectOntoSphere(
+        return when {
+            nearSouthPole -> {
+                val tileIdx = (longitude + (5 * edgeLength)) / (2 * edgeLength)
+                val leftVertex = lowerVertices[tileIdx % 5]
+                val rightVertex = lowerVertices[(tileIdx + 1) % 5]
+                val otherVertex = bottomVertex
+                val xOffset = signedModInt(longitude, 2 * edgeLength)
+                projectOntoSphere(
                         edgeLength,
                         interpolateVertices(
                                 edgeLength,
                                 leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
-                                xOffset, yOffset
+                                xOffset.toFloat(),
+                                0.5f * ((3 * edgeLength) - latitude).toFloat()
                         )
                 )
-            } else {
-                // Identify the horizontally neighbouring vertices for the face on which
-                // this tile is found
-                val tileIdx = ((hexCoords.x - yInSegment + edgeLength) / tilesPerPeriod).roundToInt()
-                val rightVertex = lowerVertices[tileIdx % 5]
-                val leftVertex = lowerVertices[(tileIdx + 1) % 5]
-
-                // Identify the other vertex
-                val otherVertex = upperVertices[tileIdx % 5]
-
-                // Calculate the tile position
-                return projectOntoSphere(
+            }
+            nearNorthPole -> {
+                val tileIdx = (longitude + (6 * edgeLength)) / (2 * edgeLength)
+                val leftVertex = upperVertices[tileIdx % 5]
+                val rightVertex = upperVertices[(tileIdx + 1) % 5]
+                val otherVertex = topVertex
+                val xOffset = signedModInt(longitude + edgeLength, 2 * edgeLength)
+                projectOntoSphere(
                         edgeLength,
                         interpolateVertices(
                                 edgeLength,
                                 leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
-                                signedMod(xOffset + edgeLength, tilesPerPeriod.toFloat()),
-                                (edgeLength * 1.5f) - yOffset
+                                xOffset.toFloat(),
+                                0.5f * (latitude - (6 * edgeLength)).toFloat()
                         )
                 )
             }
-        } else if (hexCoords.y.roundToInt() < (5 * edgeLength)) {
-            // Calculate x displacement from the nearest face centre line, in hexagons
-            val xOffset = signedMod(hexCoords.x, tilesPerPeriod.toFloat())
-
-            // Calculate y displacement from south pole, in hexagons
-            val yOffset = (5 * edgeLength) - hexCoords.y - (0.5f * abs(xOffset))
-
-            // Identify the horizontally neighbouring vertices for the face on which
-            // this tile is found
-            val tileIdx = (hexCoords.x / tilesPerPeriod).roundToInt()
-            val rightVertex = lowerVertices[tileIdx % 5]
-            val leftVertex = lowerVertices[(tileIdx + 1) % 5]
-
-            // Identify the other vertex
-            val otherVertex = if (yOffset <= (edgeLength * 1.5)) {
-                bottomVertex
-            } else {
-                upperVertices[tileIdx % 5]
-            }
-
-            // Determine whether we're above or below the horizontal edge
-            val ySignFromEdge = if (yOffset <= (edgeLength * 1.5)) {
-                +1f
-            } else {
-                -1f
-            }
-
-            // Calculate the tile position
-            return projectOntoSphere(
-                    edgeLength,
-                    interpolateVertices(
+            else -> {
+                val xOffset = signedModInt(longitude, 2 * edgeLength)
+                val distBelowUpperCircle = (6 * edgeLength - latitude)
+                if ((3 * xOffset < distBelowUpperCircle) && (3 * xOffset >= -distBelowUpperCircle)) {
+                    val tileIdx = (longitude + (5 * edgeLength)) / (2 * edgeLength)
+                    val leftVertex = lowerVertices[tileIdx % 5]
+                    val rightVertex = lowerVertices[(tileIdx + 1) % 5]
+                    val otherVertex = upperVertices[(tileIdx + 1) % 5]
+                    val xOffset = signedModInt(longitude, 2 * edgeLength)
+                    projectOntoSphere(
                             edgeLength,
-                            leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
-                            xOffset, ySignFromEdge * ((edgeLength * 1.5f) - yOffset)
+                            interpolateVertices(
+                                    edgeLength,
+                                    leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
+                                    xOffset.toFloat(),
+                                    0.5f * (latitude - (3 * edgeLength)).toFloat()
+                            )
                     )
-            )
-        } else {
-            return projectOntoSphere(edgeLength, bottomVertex.cpy())
+                } else {
+                    val tileIdx = (longitude + (6 * edgeLength)) / (2 * edgeLength)
+                    val leftVertex = upperVertices[tileIdx % 5]
+                    val rightVertex = upperVertices[(tileIdx + 1) % 5]
+                    val otherVertex = lowerVertices[tileIdx % 5]
+                    val xOffset = signedModInt(longitude + edgeLength, 2 * edgeLength)
+                    projectOntoSphere(
+                            edgeLength,
+                            interpolateVertices(
+                                    edgeLength,
+                                    leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
+                                    xOffset.toFloat(),
+                                    0.5f * ((6 * edgeLength) - latitude).toFloat()
+                            )
+                    )
+                }
+            }
         }
     }
 
     fun neighbouringHexCoords(edgeLength: Int, hexCoords: Vector2): List<Vector2> {
-
-        if (hexCoords.y.roundToInt() == 0) {
-            return 4.downTo(0).map { Vector2(it.toFloat(), 1f) }
-        } else if (hexCoords.y.roundToInt() == (5 * edgeLength)) {
-            return (0..4).map { Vector2(it.toFloat(), ((5f * edgeLength) - 1f)) }
-        } else {
-            val nTiles = getTilesPerRow(edgeLength, hexCoords.y.roundToInt()).toFloat()
-            val nTilesAbove = getTilesPerRow(edgeLength, hexCoords.y.roundToInt() - 1).toFloat()
-            val nTilesBelow = getTilesPerRow(edgeLength, hexCoords.y.roundToInt() + 1).toFloat()
-
-            val neighboursAbove = if (nTilesAbove < nTiles) {
-                if (hexCoords.x.roundToInt() % (nTiles.roundToInt() / 5) == 0) {
-                    listOf(
-                            Vector2(hexCoords.x * nTilesAbove / nTiles, hexCoords.y - 1f),
-                    )
-                } else {
-                    listOf(
-                            Vector2(floor(hexCoords.x * nTilesAbove / nTiles), hexCoords.y - 1f),
-                            Vector2(ceil(hexCoords.x * nTilesAbove / nTiles), hexCoords.y - 1f),
-                    )
-                }
-            } else if (nTilesAbove > nTiles) {
-                if (hexCoords.x.roundToInt() % (nTiles.roundToInt() / 5) == 0) {
-                    listOf(
-                            Vector2(hexCoords.x * nTilesAbove / nTiles + nTilesAbove - 1f, hexCoords.y - 1f),
-                            Vector2(hexCoords.x * nTilesAbove / nTiles, hexCoords.y - 1f),
-                            Vector2(hexCoords.x * nTilesAbove / nTiles + 1f, hexCoords.y - 1f),
-                    )
-                } else {
-                    listOf(
-                            Vector2(floor(hexCoords.x * nTilesAbove / nTiles), hexCoords.y - 1f),
-                            Vector2(ceil(hexCoords.x * nTilesAbove / nTiles), hexCoords.y - 1f),
-                    )
-                }
-            } else {
-                val xOffset = unsignedMod(hexCoords.x - hexCoords.y + (2 * edgeLength), nTiles / 5f).roundToInt()
-                if (xOffset == 0) {
-                    listOf(
-                            Vector2(unsignedMod(hexCoords.x - 1f, nTiles), hexCoords.y - 1f),
-                    )
-                } else if (xOffset < edgeLength) {
-                    listOf(
-                            Vector2(unsignedMod(hexCoords.x - 2f, nTiles), hexCoords.y - 1f),
-                            Vector2(unsignedMod(hexCoords.x - 1f, nTiles), hexCoords.y - 1f),
-                    )
-                } else if (xOffset == edgeLength) {
-                    listOf(
-                            Vector2(unsignedMod(hexCoords.x - 2f, nTiles), hexCoords.y - 1f),
-                            Vector2(unsignedMod(hexCoords.x - 1f, nTiles), hexCoords.y - 1f),
-                            Vector2(hexCoords.x, hexCoords.y - 1f),
-                    )
-                } else {
-                    listOf(
-                            Vector2(unsignedMod(hexCoords.x - 1f, nTiles), hexCoords.y - 1f),
-                            Vector2(hexCoords.x, hexCoords.y - 1f),
-                    )
-                }
-            }
-
-            val neighboursBelow = if (nTilesBelow > nTiles) {
-                if (hexCoords.x.roundToInt() % (nTiles.roundToInt() / 5) == 0) {
-                    listOf(
-                            Vector2(hexCoords.x * nTilesBelow / nTiles + 1f, hexCoords.y + 1f),
-                            Vector2(hexCoords.x * nTilesBelow / nTiles, hexCoords.y + 1f),
-                            Vector2(hexCoords.x * nTilesBelow / nTiles + nTilesBelow - 1f, hexCoords.y + 1f),
-                    )
-                } else {
-                    listOf(
-                            Vector2(ceil(hexCoords.x * nTilesBelow / nTiles), hexCoords.y + 1f),
-                            Vector2(floor(hexCoords.x * nTilesBelow / nTiles), hexCoords.y + 1f),
-                    )
-                }
-            } else if (nTilesBelow < nTiles) {
-                if (hexCoords.x.roundToInt() % (nTiles.roundToInt() / 5) == 0) {
-                    listOf(
-                            Vector2(hexCoords.x * nTilesBelow / nTiles, hexCoords.y + 1f),
-                    )
-                } else {
-                    listOf(
-                            Vector2(ceil(hexCoords.x * nTilesBelow / nTiles), hexCoords.y + 1f),
-                            Vector2(floor(hexCoords.x * nTilesBelow / nTiles), hexCoords.y + 1f),
-                    )
-                }
-            } else {
-                val xOffset = unsignedMod(hexCoords.x - hexCoords.y + (2 * edgeLength), nTiles / 5f).roundToInt()
-                if (xOffset == 0) {
-                    listOf(
-                            Vector2(unsignedMod(hexCoords.x + 2f, nTiles), hexCoords.y + 1f),
-                            Vector2(unsignedMod(hexCoords.x + 1f, nTiles), hexCoords.y + 1f),
-                            Vector2(hexCoords.x, hexCoords.y + 1f),
-                    )
-                } else if (xOffset < edgeLength) {
-                    listOf(
-                            Vector2(unsignedMod(hexCoords.x + 2f, nTiles), hexCoords.y + 1f),
-                            Vector2(unsignedMod(hexCoords.x + 1f, nTiles), hexCoords.y + 1f),
-                    )
-                } else if (xOffset == edgeLength) {
-                    listOf(
-                            Vector2(unsignedMod(hexCoords.x + 1f, nTiles), hexCoords.y + 1f),
-                    )
-                } else {
-                    listOf(
-                            Vector2(unsignedMod(hexCoords.x + 1f, nTiles), hexCoords.y + 1f),
-                            Vector2(hexCoords.x, hexCoords.y + 1f),
-                    )
-                }
-            }
-
-            return listOf(
-                    neighboursAbove,
-                    listOf(Vector2(unsignedMod(hexCoords.x + 1, nTiles), hexCoords.y)),
-                    neighboursBelow,
-                    listOf(Vector2(unsignedMod(hexCoords.x - 1, nTiles), hexCoords.y)),
-            ).flatten()
+        return HexMath.getAdjacentVectors(hexCoords).map{
+            mapToNet(edgeLength, hex2LatLong(it), hex2LatLong(hexCoords))
+        }.distinct().map{
+            val (latitude, longitude) = it
+            latLong2Hex(latitude, longitude)
         }
     }
-
 }
