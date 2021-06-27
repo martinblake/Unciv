@@ -80,12 +80,6 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
         )
         val topStretchFactor = min((textureCenter.y - region.getV()) / (region.getV2() - textureCenter.y), 2f)
         val centralVertex = VertexInfo().setPos(centralPosition).setUV(textureCenter)
-        // Find the index of the first vertex circling anticlockwise from south
-        val firstIdx = vertexPositions.indices.maxByOrNull {
-            Vector3(0f, 0f, 1f).crs(
-                    vertexPositions[(it + vertexPositions.size - 1) % vertexPositions.size].cpy().sub(vertexPositions[it])
-            ).dot(centralPosition)
-        } ?: 0
         // Define key texture coordinates
         val tSE = Vector2(textureRadius, 0f).rotateDeg(60f).add(textureCenter)
         val tE = Vector2(textureRadius, 0f).rotateDeg(0f).add(textureCenter)
@@ -97,30 +91,18 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
         val tNW_outer = Vector2(textureRadius * topStretchFactor, 0f).rotateDeg(-120f).add(textureCenter)
         when {
             (vertexPositions.size == 6) -> {
-                val vSE = VertexInfo().setPos(
-                        vertexPositions[firstIdx]
-                ).setUV(tSE)
-                val vE = VertexInfo().setPos(
-                        vertexPositions[(firstIdx + 1) % vertexPositions.size]
-                ).setUV(tE)
-                val vNE = VertexInfo().setPos(
-                        vertexPositions[(firstIdx + 2) % vertexPositions.size]
-                ).setUV(tNE)
+                val vSE = VertexInfo().setPos(vertexPositions[3]).setUV(tSE)
+                val vE = VertexInfo().setPos(vertexPositions[2]).setUV(tE)
+                val vNE = VertexInfo().setPos(vertexPositions[1]).setUV(tNE)
                 val vNE_outer = VertexInfo().setPos(
-                        centralPosition.cpy().add(vertexPositions[(firstIdx + 2) % vertexPositions.size].cpy().sub(centralPosition).scl(topStretchFactor))
+                        centralPosition.cpy().add(vertexPositions[1].cpy().sub(centralPosition).scl(topStretchFactor))
                 ).setUV(tNE_outer)
-                val vNW = VertexInfo().setPos(
-                        vertexPositions[(firstIdx + 3) % vertexPositions.size]
-                ).setUV(tNW)
+                val vNW = VertexInfo().setPos(vertexPositions[0]).setUV(tNW)
                 val vNW_outer = VertexInfo().setPos(
-                        centralPosition.cpy().add(vertexPositions[(firstIdx + 3) % vertexPositions.size].cpy().sub(centralPosition).scl(topStretchFactor))
+                        centralPosition.cpy().add(vertexPositions[0].cpy().sub(centralPosition).scl(topStretchFactor))
                 ).setUV(tNW_outer)
-                val vW = VertexInfo().setPos(
-                        vertexPositions[(firstIdx + 4) % vertexPositions.size]
-                ).setUV(tW)
-                val vSW = VertexInfo().setPos(
-                        vertexPositions[(firstIdx + 5) % vertexPositions.size]
-                ).setUV(tSW)
+                val vW = VertexInfo().setPos(vertexPositions[5]).setUV(tW)
+                val vSW = VertexInfo().setPos(vertexPositions[4]).setUV(tSW)
                 meshBuilder.triangle(centralVertex, vSE, vE)
                 meshBuilder.triangle(centralVertex, vE, vNE)
                 meshBuilder.triangle(centralVertex, vNE, vNW)

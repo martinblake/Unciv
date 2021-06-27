@@ -22,20 +22,20 @@ val bottomVertex = Vector3(0f, 0f, -sqrt(goldenRatio + 2f))
 
 // Five vertices nearest the top vertex
 val upperVertices = arrayOf<Vector3>(
-    Vector3(1f / circumradius, -goldenRatio, goldenRatio / circumradius),
-    Vector3(-(goldenRatio + 1) / circumradius, -1f, goldenRatio / circumradius),
-    Vector3(-(goldenRatio + 1) / circumradius, 1f, goldenRatio / circumradius),
     Vector3(1f / circumradius, goldenRatio, goldenRatio / circumradius),
+    Vector3(-(goldenRatio + 1) / circumradius, 1f, goldenRatio / circumradius),
+    Vector3(-(goldenRatio + 1) / circumradius, -1f, goldenRatio / circumradius),
+    Vector3(1f / circumradius, -goldenRatio, goldenRatio / circumradius),
     Vector3(2f * goldenRatio / circumradius, 0f, goldenRatio / circumradius),
 )
 
 // Five vertices nearest the bottom vertex
 val lowerVertices = arrayOf<Vector3>(
-    Vector3(-1f / circumradius, -goldenRatio, -goldenRatio / circumradius),
-    Vector3(-2f * goldenRatio / circumradius, 0f, -goldenRatio / circumradius),
     Vector3(-1f / circumradius, goldenRatio, -goldenRatio / circumradius),
-    Vector3((goldenRatio + 1) / circumradius, 1f, -goldenRatio / circumradius),
+    Vector3(-2f * goldenRatio / circumradius, 0f, -goldenRatio / circumradius),
+    Vector3(-1f / circumradius, -goldenRatio, -goldenRatio / circumradius),
     Vector3((goldenRatio + 1) / circumradius, -1f, -goldenRatio / circumradius),
+    Vector3((goldenRatio + 1) / circumradius, 1f, -goldenRatio / circumradius),
 )
 
 /**
