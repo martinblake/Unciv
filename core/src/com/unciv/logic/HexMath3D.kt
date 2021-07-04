@@ -41,29 +41,15 @@ val lowerVertices = arrayOf<Vector3>(
 /**
  * Return a value wrapped to the range 0 to +base.
  */
-fun unsignedMod(value: Float, base: Float): Float {
-    return (((value % base) + base) % base)
-}
-
-/**
- * Return a value wrapped to the range 0 to +base.
- */
-fun unsignedModInt(value: Int, base: Int): Int {
+private fun unsignedMod(value: Int, base: Int): Int {
     return (((value % base) + base) % base)
 }
 
 /**
  * Return a value wrapped to the range -(base / 2) to +(base / 2).
  */
-fun signedMod(value: Float, base: Float): Float {
+private fun signedMod(value: Int, base: Int): Int {
     return unsignedMod(value + (base / 2), base) - (base / 2)
-}
-
-/**
- * Return a value wrapped to the range -(base / 2) to +(base / 2).
- */
-fun signedModInt(value: Int, base: Int): Int {
-    return unsignedModInt(value + (base / 2), base) - (base / 2)
 }
 
 
@@ -110,7 +96,9 @@ fun signedModInt(value: Int, base: Int): Int {
  * (Note that `@` indicates vertices and `.` indicates edges, i.e. lines along which the net would
  *  be folded to form an icosahedron)
  */
-object HexMath3D {
+class HexMath3D(nTilesApprox: Int) {
+
+    private val edgeLength = getIcosahedronEdgeLength(nTilesApprox)
 
     /**
      * Return the triangular face side length for an icosahedron approximation to a sphere
@@ -119,40 +107,40 @@ object HexMath3D {
      * An icosahedron has 20 triangular faces, each with 1.5 n^2 hexagons, where
      * n is the number of complete hexagons lining the edge of each face.
      */
-    fun getIcosahedronEdgeLength(nTiles: Int): Int {
-        return round(sqrt((2f / 3f) * nTiles / 20f)).toInt()
+    private fun getIcosahedronEdgeLength(nTilesApprox: Int): Int {
+        return round(sqrt((2f / 3f) * nTilesApprox / 20f)).toInt()
     }
 
     /**
      * Return true if the given point lies on the net of the iosohedron
      */
-    private fun isPointOnNet(edgeLength: Int, latitude: Int, longitude: Int): Boolean {
+    private fun isPointOnNet(latitude: Int, longitude: Int): Boolean {
         val maxLatitude = 9 * edgeLength
         val nearSouthPole = latitude < (3 * edgeLength)
         val nearNorthPole = latitude > (6 * edgeLength)
         return when {
             ((latitude + longitude) % 2) != 0 -> false // Remove points that are not at the center of a hexagon
             nearSouthPole -> {
-                val faceOffset = signedModInt(longitude, 2 * edgeLength)
+                val faceOffset = signedMod(longitude, 2 * edgeLength)
                 (3 * faceOffset < latitude) && (3 * faceOffset >= -latitude)
             }
             nearNorthPole -> {
-                val faceOffset = signedModInt(longitude - edgeLength, 2 * edgeLength)
+                val faceOffset = signedMod(longitude - edgeLength, 2 * edgeLength)
                 (3 * faceOffset < (maxLatitude - latitude)) && (3 * faceOffset >= -(maxLatitude - latitude))
             }
             else -> true
         }
     }
 
-    private fun getMinLongitude(edgeLength: Int, latitude: Int): Int {
+    private fun getMinLongitude(latitude: Int): Int {
         return ceil(-(4f * edgeLength) - (latitude / 3f)).toInt()
     }
 
-    private fun getMaxLongitude(edgeLength: Int, latitude: Int): Int {
+    private fun getMaxLongitude(latitude: Int): Int {
         return ceil((6f * edgeLength) - (latitude / 3f)).toInt() - 1
     }
 
-    private fun mapToNet(edgeLength: Int, latLong: Pair<Int, Int>, baseLatLong: Pair<Int, Int>): Pair<Int, Int> {
+    private fun mapToNet(latLong: Pair<Int, Int>, baseLatLong: Pair<Int, Int>): Pair<Int, Int> {
         val (latitude, longitude) = latLong
         var (baseLatitude, baseLongitude) = baseLatLong
 
@@ -192,7 +180,7 @@ object HexMath3D {
         val nearNorthPole = outputLat > (6 * edgeLength)
 
         if (nearSouthPole) {
-            val faceCenterLongitude = baseLongitude - signedModInt(baseLongitude, 2 * edgeLength)
+            val faceCenterLongitude = baseLongitude - signedMod(baseLongitude, 2 * edgeLength)
             val faceOffset = outputLong - faceCenterLongitude
             val rightEdgeExcess = (3 * faceOffset) - outputLat
             val leftEdgeExcess = (-3 * faceOffset) - outputLat
@@ -210,7 +198,7 @@ object HexMath3D {
         }
 
         if (nearNorthPole) {
-            val faceCenterLongitude = baseLongitude - signedModInt(baseLongitude - edgeLength, 2 * edgeLength)
+            val faceCenterLongitude = baseLongitude - signedMod(baseLongitude - edgeLength, 2 * edgeLength)
             val faceOffset = outputLong - faceCenterLongitude
             val rightEdgeExcess = (3 * faceOffset) - (maxLatitude - outputLat)
             val leftEdgeExcess = (-3 * faceOffset) - (maxLatitude - outputLat)
@@ -227,8 +215,8 @@ object HexMath3D {
             }
         }
 
-        val minLongitude = getMinLongitude(edgeLength, outputLat)
-        val maxLongitude = getMaxLongitude(edgeLength, outputLat)
+        val minLongitude = getMinLongitude(outputLat)
+        val maxLongitude = getMaxLongitude(outputLat)
         when {
             (outputLong < minLongitude) -> {
                 outputLong += (10 * edgeLength)
@@ -245,15 +233,15 @@ object HexMath3D {
     /**
      * Return a list of all vectors defining points on the mapped surface of the icosahedron.
      */
-    fun getAllVectors(edgeLength: Int): List<Vector2> {
+    fun getAllVectors(): List<Vector2> {
         val vectors = mutableListOf<Vector2>()
         val maxLatitude = (9 * edgeLength)
         vectors.add(latLong2Hex(0, 0))
         for (latitude in 1 until maxLatitude) {
-            val minLongitude = getMinLongitude(edgeLength, latitude)
-            val maxLongitude = getMaxLongitude(edgeLength, latitude)
+            val minLongitude = getMinLongitude(latitude)
+            val maxLongitude = getMaxLongitude(latitude)
             for (longitude in minLongitude..maxLongitude) {
-                if (isPointOnNet(edgeLength, latitude, longitude)) {
+                if (isPointOnNet(latitude, longitude)) {
                     vectors.add(latLong2Hex(latitude, longitude))
                 }
             }
@@ -262,7 +250,7 @@ object HexMath3D {
         return vectors
     }
 
-    private fun interpolateVertices(edgeLength: Int, left: Vector3, right: Vector3, other: Vector3, x: Float, y: Float): Vector3 {
+    private fun interpolateVertices(left: Vector3, right: Vector3, other: Vector3, x: Float, y: Float): Vector3 {
         val yRatio = y / (edgeLength * 1.5f)
         val leftEdgeRatio = (1 - yRatio + x / edgeLength) * 0.5f
         val rightEdgeRatio = (1 - yRatio - x / edgeLength) * 0.5f
@@ -275,7 +263,7 @@ object HexMath3D {
         )
     }
 
-    private fun projectOntoSphere(edgeLength: Int, position: Vector3): Vector3 {
+    private fun projectOntoSphere(position: Vector3): Vector3 {
         return position.nor().scl(circumradius)
     }
 
@@ -291,7 +279,7 @@ object HexMath3D {
         return Vector2(x, y)
     }
 
-    fun hex2WorldCoords(edgeLength: Int, hexCoords: Vector2): Vector3 {
+    fun hex2WorldCoords(hexCoords: Vector2): Vector3 {
 
         val (latitude, longitude) = hex2LatLong(hexCoords)
 
@@ -304,11 +292,9 @@ object HexMath3D {
                 val leftVertex = lowerVertices[tileIdx % 5]
                 val rightVertex = lowerVertices[(tileIdx + 1) % 5]
                 val otherVertex = bottomVertex
-                val xOffset = signedModInt(longitude, 2 * edgeLength)
+                val xOffset = signedMod(longitude, 2 * edgeLength)
                 projectOntoSphere(
-                        edgeLength,
                         interpolateVertices(
-                                edgeLength,
                                 leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
                                 xOffset.toFloat(),
                                 0.5f * ((3 * edgeLength) - latitude).toFloat()
@@ -320,11 +306,9 @@ object HexMath3D {
                 val leftVertex = upperVertices[tileIdx % 5]
                 val rightVertex = upperVertices[(tileIdx + 1) % 5]
                 val otherVertex = topVertex
-                val xOffset = signedModInt(longitude + edgeLength, 2 * edgeLength)
+                val xOffset = signedMod(longitude + edgeLength, 2 * edgeLength)
                 projectOntoSphere(
-                        edgeLength,
                         interpolateVertices(
-                                edgeLength,
                                 leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
                                 xOffset.toFloat(),
                                 0.5f * (latitude - (6 * edgeLength)).toFloat()
@@ -332,18 +316,16 @@ object HexMath3D {
                 )
             }
             else -> {
-                val xOffset = signedModInt(longitude, 2 * edgeLength)
+                val xOffset = signedMod(longitude, 2 * edgeLength)
                 val distBelowUpperCircle = (6 * edgeLength - latitude)
                 if ((3 * xOffset < distBelowUpperCircle) && (3 * xOffset >= -distBelowUpperCircle)) {
                     val tileIdx = (longitude + (5 * edgeLength)) / (2 * edgeLength)
                     val leftVertex = lowerVertices[tileIdx % 5]
                     val rightVertex = lowerVertices[(tileIdx + 1) % 5]
                     val otherVertex = upperVertices[(tileIdx + 1) % 5]
-                    val xOffset = signedModInt(longitude, 2 * edgeLength)
+                    val xOffset = signedMod(longitude, 2 * edgeLength)
                     projectOntoSphere(
-                            edgeLength,
                             interpolateVertices(
-                                    edgeLength,
                                     leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
                                     xOffset.toFloat(),
                                     0.5f * (latitude - (3 * edgeLength)).toFloat()
@@ -354,11 +336,9 @@ object HexMath3D {
                     val leftVertex = upperVertices[tileIdx % 5]
                     val rightVertex = upperVertices[(tileIdx + 1) % 5]
                     val otherVertex = lowerVertices[tileIdx % 5]
-                    val xOffset = signedModInt(longitude + edgeLength, 2 * edgeLength)
+                    val xOffset = signedMod(longitude + edgeLength, 2 * edgeLength)
                     projectOntoSphere(
-                            edgeLength,
                             interpolateVertices(
-                                    edgeLength,
                                     leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
                                     xOffset.toFloat(),
                                     0.5f * ((6 * edgeLength) - latitude).toFloat()
@@ -369,9 +349,9 @@ object HexMath3D {
         }
     }
 
-    fun neighbouringHexCoords(edgeLength: Int, hexCoords: Vector2): List<Vector2> {
+    fun neighbouringHexCoords(hexCoords: Vector2): List<Vector2> {
         return HexMath.getAdjacentVectors(hexCoords).map{
-            mapToNet(edgeLength, hex2LatLong(it), hex2LatLong(hexCoords))
+            mapToNet(hex2LatLong(it), hex2LatLong(hexCoords))
         }.distinct().map{
             val (latitude, longitude) = it
             latLong2Hex(latitude, longitude)

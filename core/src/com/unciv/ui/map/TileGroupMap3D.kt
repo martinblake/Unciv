@@ -129,16 +129,12 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
                 Material()
         )
         for(tileGroup in tileGroups.reversed()) {
-            val position = HexMath3D.hex2WorldCoords(
-                    tileGroup.tileInfo.tileMap.icosahedronEdgeLength,
-                    tileGroup.tileInfo.position
-            )
-            val neighbourPositions = HexMath3D.neighbouringHexCoords(
-                    tileGroup.tileInfo.tileMap.icosahedronEdgeLength,
+            val hexMap = tileGroup.tileInfo.tileMap.hexMap
+            val position = hexMap.hex2WorldCoords(tileGroup.tileInfo.position)
+            val neighbourPositions = hexMap.neighbouringHexCoords(
                     tileGroup.tileInfo.position
             ).map{
-                HexMath3D.hex2WorldCoords(
-                        tileGroup.tileInfo.tileMap.icosahedronEdgeLength,
+                hexMap.hex2WorldCoords(
                         it
                 )
             }

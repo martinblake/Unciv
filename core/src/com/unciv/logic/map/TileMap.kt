@@ -27,7 +27,7 @@ class TileMap {
     var bottomY = 0
 
     @Transient
-    var icosahedronEdgeLength = 0
+    lateinit var hexMap: HexMath3D
 
     @delegate:Transient
     val maxLatitude: Float by lazy { if (values.isEmpty()) 0f else values.map { abs(it.latitude) }.maxOrNull()!! }
@@ -59,8 +59,7 @@ class TileMap {
             }
             MapShape.spherical -> {
                 val nTiles = HexMath.getNumberOfTilesInHexagon(mapSize.radius)
-                val edgeLength = HexMath3D.getIcosahedronEdgeLength(nTiles)
-                generateSphericalMap(edgeLength)
+                generateSphericalMap(HexMath3D(nTiles))
             }
             else -> Exception("Invalid mapShape '$mapShape'")
         }
@@ -92,8 +91,8 @@ class TileMap {
     }
 
     /** generates a spherical map approximated by an icosahedron of given edge length */
-    private fun generateSphericalMap(edgeLength: Int) {
-        for (vector in HexMath3D.getAllVectors(edgeLength))
+    private fun generateSphericalMap(hexMap: HexMath3D) {
+        for (vector in hexMap.getAllVectors())
             tileList.add(TileInfo().apply {
                 position = vector;
                 baseTerrain = Constants.grassland
@@ -363,7 +362,7 @@ class TileMap {
         }
 
         // Key dimension for spherical map shape
-        icosahedronEdgeLength = HexMath3D.getIcosahedronEdgeLength(tileList.size)
+        hexMap = HexMath3D(tileList.size)
     }
 
     /**

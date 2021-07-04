@@ -14,6 +14,18 @@ class HexMath3DTests {
     private val tolerance = 1e-6f
 
     /**
+     * Calculate the expected number of tiles for the given icosahedron edge length.
+     */
+    private fun nTilesForEdgeLength(edgeLength: Int): Int {
+        // Calculate the number of hexagonal tiles that fit in one triangular face
+        val numTilesPerFace = 1.5f * edgeLength * edgeLength
+
+        // Multiply by the number of faces and add 2 to account for the 12 pentagonal
+        // tiles at the vertices that take up an area equivalent to 10 hexagonal tiles
+        return (numTilesPerFace * 20).toInt() + 2
+    }
+
+    /**
      * Check that the distance between adjacent icosahedron vertices is correct.
      */
     @Test
@@ -48,20 +60,13 @@ class HexMath3DTests {
 
     /**
      * Check that the correct numbers of tiles are generated for a range of edge lengths
-     * based on the geometry of the icosahedron the are mapped onto
+     * based on the geometry of the icosahedron they are mapped onto
      */
     @Test
     fun numTiles() {
         for (edgeLength in 1..10) {
-
-            // Calculate the number of hexagonal tiles that fit in one triangular face
-            val numTilesPerFace = 1.5f * edgeLength * edgeLength
-
-            // Multiply by the number of faces and add 2 to account for the 12 pentagonal
-            // tiles at the vertices that take up an area equivalent to 10 hexagonal tiles
-            val expectedNumTiles = (numTilesPerFace * 20).toInt() + 2
-
-            Assert.assertEquals(expectedNumTiles, HexMath3D.getAllVectors(edgeLength).size)
+            val expectedNumTiles = nTilesForEdgeLength(edgeLength)
+            Assert.assertEquals(expectedNumTiles, HexMath3D(expectedNumTiles).getAllVectors().size)
         }
     }
 
@@ -80,7 +85,8 @@ class HexMath3DTests {
                 Pair(15, 12),
         )
 
-        val testCoords = HexMath3D.getAllVectors(3)
+        val hexMap = HexMath3D(nTilesForEdgeLength(edgeLength))
+        val testCoords = hexMap.getAllVectors()
 
         for (coords in testCoords) {
             val isVertexCoord = vertexCoords.any {
@@ -88,7 +94,7 @@ class HexMath3DTests {
             }
             val expectedNumNeighbours = if (isVertexCoord) 5 else 6
 
-            val neighbours = HexMath3D.neighbouringHexCoords(edgeLength, coords)
+            val neighbours = hexMap.neighbouringHexCoords(coords)
             Assert.assertEquals(
                     "Incorrect number of neighbours for point ${coords}",
                     expectedNumNeighbours,
@@ -100,9 +106,9 @@ class HexMath3DTests {
     /**
      * Check the distance between the positions specified by two sets of coordinates
      */
-    fun checkDistance(edgeLength: Int, expDistance: Float, relTol: Float, c1: Vector2, c2: Vector2) {
-        val p1 = HexMath3D.hex2WorldCoords(edgeLength, c1)
-        val p2 = HexMath3D.hex2WorldCoords(edgeLength, c2)
+    fun checkDistance(hexMap: HexMath3D, expDistance: Float, relTol: Float, c1: Vector2, c2: Vector2) {
+        val p1 = hexMap.hex2WorldCoords(c1)
+        val p2 = hexMap.hex2WorldCoords(c2)
         val distance = p1.cpy().sub(p2).len()
         val msg = "Distance $distance is not close to $expDistance for points $c1 and $c2"
         Assert.assertTrue(msg, distance > expDistance * (1f - relTol))
@@ -122,15 +128,16 @@ class HexMath3DTests {
         // Allow up to 30% variation in distance after projecting onto the sphere.
         val margin = 0.3f
 
-        val testCoords = HexMath3D.getAllVectors(3)
+        val hexMap = HexMath3D(nTilesForEdgeLength(edgeLength))
+        val testCoords = hexMap.getAllVectors()
 
         for (coords in testCoords) {
-            val neighbourCoordsList = HexMath3D.neighbouringHexCoords(edgeLength, coords)
+            val neighbourCoordsList = hexMap.neighbouringHexCoords(coords)
             for ((i, neighbourCoords) in neighbourCoordsList.withIndex()) {
                 val nextNeighbourCoords = neighbourCoordsList[(i + 1) % neighbourCoordsList.size]
 
-                checkDistance(edgeLength, expectedDistance, margin, coords, neighbourCoords)
-                checkDistance(edgeLength, expectedDistance, margin, neighbourCoords, nextNeighbourCoords)
+                checkDistance(hexMap, expectedDistance, margin, coords, neighbourCoords)
+                checkDistance(hexMap, expectedDistance, margin, neighbourCoords, nextNeighbourCoords)
             }
         }
     }
