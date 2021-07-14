@@ -141,4 +141,34 @@ class HexMath3DTests {
             }
         }
     }
+
+    /**
+     * Check that the distances between outer adjacent tiles are approximately correct
+     */
+    @Test
+    fun tileSeparationOuter() {
+        val edgeLength = 3
+
+        // The exact distance on the icosahedron surface, before projecting onto the sphere
+        val expectedDistance = 2f / edgeLength
+
+        // Allow up to 30% variation in distance after projecting onto the sphere.
+        val margin = 0.3f
+        // Allow up to 60% variation between neighbours, since they may be adjacent when
+        // encircling a vertex
+        val wideMargin = 0.6f
+
+        val hexMap = HexMath3D(nTilesForEdgeLength(edgeLength))
+        val testCoords = hexMap.getAllVectors()
+
+        for (coords in testCoords) {
+            val neighbourCoordsList = hexMap.outerNeighbouringHexCoords(coords)
+            for ((i, neighbourCoords) in neighbourCoordsList.withIndex()) {
+                val nextNeighbourCoords = neighbourCoordsList[(i + 1) % neighbourCoordsList.size]
+
+                checkDistance(hexMap, expectedDistance, wideMargin, coords, neighbourCoords)
+                checkDistance(hexMap, expectedDistance, wideMargin, neighbourCoords, nextNeighbourCoords)
+            }
+        }
+    }
 }

@@ -38,6 +38,7 @@ val lowerVertices = arrayOf<Vector3>(
     Vector3((goldenRatio + 1) / circumradius, 1f, -goldenRatio / circumradius),
 )
 
+
 /**
  * Return a value wrapped to the range 0 to +base.
  */
@@ -50,6 +51,329 @@ private fun unsignedMod(value: Int, base: Int): Int {
  */
 private fun signedMod(value: Int, base: Int): Int {
     return unsignedMod(value + (base / 2), base) - (base / 2)
+}
+
+private fun integerDiv(value: Int, base: Int): Int {
+    return (value - unsignedMod(value, base)) / base
+}
+
+enum class Rotation {
+    CLOCKWISE_60
+    {
+        override fun apply(vector: Vector2): Vector2 = Vector2(vector.x - vector.y, vector.x)
+    },
+    CLOCKWISE_120
+    {
+        override fun apply(vector: Vector2): Vector2 = Vector2(-vector.y, vector.x - vector.y)
+    },
+    ANTICLOCKWISE_60
+    {
+        override fun apply(vector: Vector2): Vector2 = Vector2(vector.y, vector.y - vector.x)
+    },
+    ANTICLOCKWISE_120
+    {
+        override fun apply(vector: Vector2): Vector2 = Vector2(vector.y - vector.x, -vector.x)
+    };
+
+    /**
+     * Apply rotation to a hex-coordinate vector (with x pointing in 10 o'clock and
+     * y in 2 o'clock directions)
+     */
+    abstract fun apply(vector: Vector2): Vector2
+}
+
+private class Face(val latitude: Latitude, val longitude: Int) {
+
+    enum class Latitude {
+        POLAR_NORTH,
+        EQUATORIAL_NORTH,
+        EQUATORIAL_SOUTH,
+        POLAR_SOUTH
+    }
+
+    fun centerX(): Int {
+        return when (latitude) {
+            Latitude.POLAR_NORTH -> (6 - longitude)
+            Latitude.EQUATORIAL_NORTH -> (5 - longitude)
+            Latitude.EQUATORIAL_SOUTH -> (4 - longitude)
+            Latitude.POLAR_SOUTH -> (3 - longitude)
+        }
+    }
+
+    fun centerY(): Int {
+        return when (latitude) {
+            Latitude.POLAR_NORTH -> (longitude + 1)
+            Latitude.EQUATORIAL_NORTH -> longitude
+            Latitude.EQUATORIAL_SOUTH -> longitude
+            Latitude.POLAR_SOUTH -> (longitude - 1)
+        }
+    }
+}
+
+
+/**
+ * Location on the surface of an icosahedron.
+ *  face -- the triangular face
+ *  coords -- the (x, y) hex-coordinates of the location relative to the face center
+ */
+private class SurfaceLocation(val face: Face, val coords: Vector2) {
+
+    /**
+     * Return the face corresponding to the given displacement from this face's center.
+     * The displacement is specified in hex-coordinates as fractions of the edge length of a face.
+     */
+    fun add(diff: Vector2): SurfaceLocation? {
+        val newCoords = coords.cpy().add(diff)
+        val x = newCoords.x + (1e-6f * newCoords.y)  // Rotate a consistent very small amount, so that
+        val y = newCoords.y - (1e-6f * newCoords.x)  // points along edges aren't double-counted
+        val eastLongitude = unsignedMod(face.longitude + 1, 5)
+        val westLongitude = unsignedMod(face.longitude - 1, 5)
+        val farEastLongitude = unsignedMod(face.longitude + 2, 5)
+        val farWestLongitude = unsignedMod(face.longitude - 2, 5)
+        val x_dist = 2f * x - y
+        val y_dist = 2f * y - x
+        val z_dist = -(x + y)
+        val t1 = 1f
+        val t2 = 2f
+        return when (face.latitude) {
+            Face.Latitude.POLAR_NORTH -> when {
+                /**
+                 * North-pointing triangular face
+                 *          .    .
+                 *         / \  / \
+                 *        /___\/___\
+                 *      / \  / \  / \
+                 *     /___\/___\/___\
+                 *        / \  / \
+                 *       /___\/___\
+                 */
+                (x_dist <= t1) && (y_dist <= t1) && (z_dist <= t1) -> SurfaceLocation(
+                        Face(face.latitude, face.longitude),
+                        Vector2(0f, 0f).add(x, y)
+                )
+                (x_dist > t1) && (y_dist <= t1) && (z_dist <= t1) -> when {
+                    (y_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, westLongitude),
+                            Rotation.ANTICLOCKWISE_60.apply(Vector2(-1f, 1f).add(x, y))
+                    )
+                    (z_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, farWestLongitude),
+                            Rotation.ANTICLOCKWISE_120.apply(Vector2(-2f, -1f).add(x, y))
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, westLongitude),
+                            Rotation.ANTICLOCKWISE_60.apply(Vector2(-1f, 0f).add(x, y))
+                    )
+                }
+                (y_dist > t1) && (z_dist <= t1) && (x_dist <= t1) -> when {
+                    (z_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, farEastLongitude),
+                            Rotation.CLOCKWISE_120.apply(Vector2(-1f, -2f).add(x, y))
+                    )
+                    (x_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, eastLongitude),
+                            Rotation.CLOCKWISE_60.apply(Vector2(1f, -1f).add(x, y))
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, eastLongitude),
+                            Rotation.CLOCKWISE_60.apply(Vector2(0f, -1f).add(x, y))
+                    )
+                }
+                (z_dist > t1) && (x_dist <= t1) && (y_dist <= t1) -> when {
+                    (x_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, face.longitude),
+                            Vector2(2f, 1f).add(x, y)
+                    )
+                    (y_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, westLongitude),
+                            Vector2(1f, 2f).add(x, y)
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, face.longitude),
+                            Vector2(1f, 1f).add(x, y)
+                    )
+                }
+                else -> null
+            }
+            Face.Latitude.EQUATORIAL_NORTH -> when {
+                /**
+                 * South-pointing triangular face
+                 *        .___..___.
+                 *        \  / \  /
+                 *     .___\/___\/___.
+                 *     \  / \  / \  /
+                 *      \/___\/___\/
+                 *       \  / \  /
+                 *        \/   \/
+                 */
+                (x_dist >= -t1) && (y_dist >= -t1) && (z_dist >= -t1) -> SurfaceLocation(
+                        Face(face.latitude, face.longitude),
+                        Vector2(0f, 0f).add(x, y)
+                )
+                (x_dist < -t1) && (y_dist >= -t1) && (z_dist >= -t1) -> when {
+                    (y_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, eastLongitude),
+                            Vector2(1f, -1f).add(x, y)
+                    )
+                    (z_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, face.longitude),
+                            Vector2(2f, 1f).add(x, y)
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, face.longitude),
+                            Vector2(1f, 0f).add(x, y)
+                    )
+                }
+                (y_dist < -t1) && (z_dist >= -t1) && (x_dist >= -t1) -> when {
+                    (z_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, westLongitude),
+                            Vector2(1f, 2f).add(x, y)
+                    )
+                    (x_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, westLongitude),
+                            Vector2(-1f, 1f).add(x, y)
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, westLongitude),
+                            Vector2(0f, 1f).add(x, y)
+                    )
+                }
+                (z_dist < -t1) && (x_dist >= -t1) && (y_dist >= -t1) -> when {
+                    (x_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, westLongitude),
+                            Rotation.ANTICLOCKWISE_60.apply(Vector2(-2f, -1f).add(x, y))
+                    )
+                    (y_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, eastLongitude),
+                            Rotation.CLOCKWISE_60.apply(Vector2(-1f, -2f).add(x, y))
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, face.longitude),
+                            Vector2(-1f, -1f).add(x, y)
+                    )
+                }
+                else -> null
+            }
+            Face.Latitude.EQUATORIAL_SOUTH -> when {
+                /**
+                 * North-pointing triangular face
+                 *          .    .
+                 *         / \  / \
+                 *        /___\/___\
+                 *      / \  / \  / \
+                 *     /___\/___\/___\
+                 *        / \  / \
+                 *       /___\/___\
+                 */
+                (x_dist <= t1) && (y_dist <= t1) && (z_dist <= t1) -> SurfaceLocation(
+                        Face(face.latitude, face.longitude),
+                        Vector2(0f, 0f).add(x, y)
+                )
+                (x_dist > t1) && (y_dist <= t1) && (z_dist <= t1) -> when {
+                    (y_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, westLongitude),
+                            Vector2(-1f, 1f).add(x, y)
+                    )
+                    (z_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, face.longitude),
+                            Vector2(-2f, -1f).add(x, y)
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, face.longitude),
+                            Vector2(-1f, 0f).add(x, y)
+                    )
+                }
+                (y_dist > t1) && (z_dist <= t1) && (x_dist <= t1) -> when {
+                    (z_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_NORTH, eastLongitude),
+                            Vector2(-1f, -2f).add(x, y)
+                    )
+                    (x_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, eastLongitude),
+                            Vector2(1f, -1f).add(x, y)
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, eastLongitude),
+                            Vector2(0f, -1f).add(x, y)
+                    )
+                }
+                (z_dist > t1) && (x_dist <= t1) && (y_dist <= t1) -> when {
+                    (x_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, eastLongitude),
+                            Rotation.ANTICLOCKWISE_60.apply(Vector2(2f, 1f).add(x, y))
+                    )
+                    (y_dist <= -t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, westLongitude),
+                            Rotation.CLOCKWISE_60.apply(Vector2(1f, 2f).add(x, y))
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, face.longitude),
+                            Vector2(1f, 1f).add(x, y)
+                    )
+                }
+                else -> null
+            }
+            Face.Latitude.POLAR_SOUTH -> when {
+                /**
+                 * South-pointing triangular face
+                 *        .___..___.
+                 *        \  / \  /
+                 *     .___\/___\/___.
+                 *     \  / \  / \  /
+                 *      \/___\/___\/
+                 *       \  / \  /
+                 *        \/   \/
+                 */
+                (x_dist >= -t1) && (y_dist >= -t1) && (z_dist >= -t1) -> SurfaceLocation(
+                        Face(face.latitude, face.longitude),
+                        Vector2(0f, 0f).add(x, y)
+                )
+                (x_dist < -t1) && (y_dist >= -t1) && (z_dist >= -t1) -> when {
+                    (y_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, eastLongitude),
+                            Rotation.ANTICLOCKWISE_60.apply(Vector2(1f, -1f).add(x, y))
+                    )
+                    (z_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, farEastLongitude),
+                            Rotation.ANTICLOCKWISE_120.apply(Vector2(2f, 1f).add(x, y))
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, eastLongitude),
+                            Rotation.ANTICLOCKWISE_60.apply(Vector2(1f, 0f).add(x, y))
+                    )
+                }
+                (y_dist < -t1) && (z_dist >= -t1) && (x_dist >= -t1) -> when {
+                    (z_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, farWestLongitude),
+                            Rotation.CLOCKWISE_120.apply(Vector2(1f, 2f).add(x, y))
+                    )
+                    (x_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, westLongitude),
+                            Rotation.CLOCKWISE_60.apply(Vector2(-1f, 1f).add(x, y))
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.POLAR_SOUTH, westLongitude),
+                            Rotation.CLOCKWISE_60.apply(Vector2(0f, 1f).add(x, y))
+                    )
+                }
+                (z_dist < -t1) && (x_dist >= -t1) && (y_dist >= -t1) -> when {
+                    (x_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, face.longitude),
+                            Vector2(-2f, -1f).add(x, y)
+                    )
+                    (y_dist >= t2) -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_NORTH, eastLongitude),
+                            Vector2(-1f, -2f).add(x, y)
+                    )
+                    else -> SurfaceLocation(
+                            Face(Face.Latitude.EQUATORIAL_SOUTH, face.longitude),
+                            Vector2(-1f, -1f).add(x, y)
+                    )
+                }
+                else -> null
+            }
+        }
+    }
 }
 
 
@@ -140,96 +464,6 @@ class HexMath3D(nTilesApprox: Int) {
         return ceil((6f * edgeLength) - (latitude / 3f)).toInt() - 1
     }
 
-    private fun mapToNet(latLong: Pair<Int, Int>, baseLatLong: Pair<Int, Int>): Pair<Int, Int> {
-        val (latitude, longitude) = latLong
-        var (baseLatitude, baseLongitude) = baseLatLong
-
-        val maxLatitude = (9 * edgeLength)
-        val isSouthPole = latitude == 0
-        val isNorthPole = latitude == maxLatitude
-
-        if (isSouthPole) return Pair(0, 0)
-        if (isNorthPole) return Pair(maxLatitude, -edgeLength)
-
-        var outputLat = latitude
-        var outputLong = longitude
-
-        if (latitude == -1) {
-            outputLat = 2
-            outputLong = 4 * edgeLength * longitude
-            baseLongitude = outputLong
-        }
-        if (latitude == -2) {
-            outputLat = 2
-            outputLong = 6 * edgeLength
-            baseLongitude = outputLong
-        }
-
-        if (latitude == maxLatitude + 1) {
-            outputLat = maxLatitude - 2
-            outputLong = 4 * edgeLength * (edgeLength + longitude) - edgeLength
-            baseLongitude = outputLong
-        }
-        if (latitude == maxLatitude + 2) {
-            outputLat = maxLatitude - 2
-            outputLong = 5 * edgeLength
-            baseLongitude = outputLong
-        }
-
-        val nearSouthPole = outputLat < (3 * edgeLength)
-        val nearNorthPole = outputLat > (6 * edgeLength)
-
-        if (nearSouthPole) {
-            val faceCenterLongitude = baseLongitude - signedMod(baseLongitude, 2 * edgeLength)
-            val faceOffset = outputLong - faceCenterLongitude
-            val rightEdgeExcess = (3 * faceOffset) - outputLat
-            val leftEdgeExcess = (-3 * faceOffset) - outputLat
-            when {
-                (rightEdgeExcess >= 0) -> {
-                    outputLat += (rightEdgeExcess / 2)
-                    outputLong += ((2 * edgeLength) + (rightEdgeExcess / 2) - (2 * faceOffset))
-                }
-                (leftEdgeExcess > 0) -> {
-                    outputLat += (leftEdgeExcess / 2)
-                    outputLong -= ((2 * edgeLength) + (leftEdgeExcess / 2) + (2 * faceOffset))
-                }
-                else -> {/* No change required */}
-            }
-        }
-
-        if (nearNorthPole) {
-            val faceCenterLongitude = baseLongitude - signedMod(baseLongitude - edgeLength, 2 * edgeLength)
-            val faceOffset = outputLong - faceCenterLongitude
-            val rightEdgeExcess = (3 * faceOffset) - (maxLatitude - outputLat)
-            val leftEdgeExcess = (-3 * faceOffset) - (maxLatitude - outputLat)
-            when {
-                (rightEdgeExcess >= 0) -> {
-                    outputLat -= (rightEdgeExcess / 2)
-                    outputLong += ((2 * edgeLength) + (rightEdgeExcess / 2) - (2 * faceOffset))
-                }
-                (leftEdgeExcess > 0) -> {
-                    outputLat -= (leftEdgeExcess / 2)
-                    outputLong -= ((2 * edgeLength) + (leftEdgeExcess / 2) + (2 * faceOffset))
-                }
-                else -> {/* No change required */}
-            }
-        }
-
-        val minLongitude = getMinLongitude(outputLat)
-        val maxLongitude = getMaxLongitude(outputLat)
-        when {
-            (outputLong < minLongitude) -> {
-                outputLong += (10 * edgeLength)
-            }
-            (outputLong > maxLongitude) -> {
-                outputLong -= (10 * edgeLength)
-            }
-            else -> {/* No change required */}
-        }
-
-        return Pair(outputLat, outputLong)
-    }
-
     /**
      * Return a list of all vectors defining points on the mapped surface of the icosahedron.
      */
@@ -288,7 +522,7 @@ class HexMath3D(nTilesApprox: Int) {
 
         return when {
             nearSouthPole -> {
-                val tileIdx = (longitude + (5 * edgeLength)) / (2 * edgeLength)
+                val tileIdx = unsignedMod(integerDiv(longitude + (5 * edgeLength), (2 * edgeLength)), 5)
                 val leftVertex = lowerVertices[tileIdx % 5]
                 val rightVertex = lowerVertices[(tileIdx + 1) % 5]
                 val otherVertex = bottomVertex
@@ -302,7 +536,7 @@ class HexMath3D(nTilesApprox: Int) {
                 )
             }
             nearNorthPole -> {
-                val tileIdx = (longitude + (6 * edgeLength)) / (2 * edgeLength)
+                val tileIdx = unsignedMod(integerDiv(longitude + (6 * edgeLength), (2 * edgeLength)), 5)
                 val leftVertex = upperVertices[tileIdx % 5]
                 val rightVertex = upperVertices[(tileIdx + 1) % 5]
                 val otherVertex = topVertex
@@ -319,7 +553,7 @@ class HexMath3D(nTilesApprox: Int) {
                 val xOffset = signedMod(longitude, 2 * edgeLength)
                 val distBelowUpperCircle = (6 * edgeLength - latitude)
                 if ((3 * xOffset < distBelowUpperCircle) && (3 * xOffset >= -distBelowUpperCircle)) {
-                    val tileIdx = (longitude + (5 * edgeLength)) / (2 * edgeLength)
+                    val tileIdx = unsignedMod(integerDiv(longitude + (5 * edgeLength), (2 * edgeLength)), 5)
                     val leftVertex = lowerVertices[tileIdx % 5]
                     val rightVertex = lowerVertices[(tileIdx + 1) % 5]
                     val otherVertex = upperVertices[(tileIdx + 1) % 5]
@@ -332,7 +566,7 @@ class HexMath3D(nTilesApprox: Int) {
                             )
                     )
                 } else {
-                    val tileIdx = (longitude + (6 * edgeLength)) / (2 * edgeLength)
+                    val tileIdx = unsignedMod(integerDiv(longitude + (6 * edgeLength), (2 * edgeLength)), 5)
                     val leftVertex = upperVertices[tileIdx % 5]
                     val rightVertex = upperVertices[(tileIdx + 1) % 5]
                     val otherVertex = lowerVertices[tileIdx % 5]
@@ -349,12 +583,60 @@ class HexMath3D(nTilesApprox: Int) {
         }
     }
 
-    fun neighbouringHexCoords(hexCoords: Vector2): List<Vector2> {
-        return HexMath.getAdjacentVectors(hexCoords).map{
-            mapToNet(hex2LatLong(it), hex2LatLong(hexCoords))
-        }.distinct().map{
-            val (latitude, longitude) = it
-            latLong2Hex(latitude, longitude)
+    private fun hexCoords2SurfaceLoc(hexCoords: Vector2): SurfaceLocation {
+        val x = hexCoords.x / edgeLength.toFloat()
+        val y = hexCoords.y / edgeLength.toFloat()
+        val z = x + y
+        val xFaceIdx = floor((2f * x - y - sign(z - 4.5f) * 1e-6f) / 3f).roundToInt()
+        val yFaceIdx = floor((2f * y - x - sign(z - 4.5f) * 1e-6f) / 3f).roundToInt()
+        val faceLatitude = when {
+            z < 3f -> Face.Latitude.POLAR_SOUTH
+            z > 6f -> Face.Latitude.POLAR_NORTH
+            (xFaceIdx + yFaceIdx) % 2 == 0 -> Face.Latitude.EQUATORIAL_SOUTH
+            else -> Face.Latitude.EQUATORIAL_NORTH
         }
+        val face = Face(faceLatitude, yFaceIdx + 2)
+        return SurfaceLocation(face, Vector2(x - face.centerX(), y - face.centerY()))
+    }
+
+    private fun surfaceLoc2HexCoords(surfaceLoc: SurfaceLocation): Vector2 {
+        val x = (surfaceLoc.coords.x + surfaceLoc.face.centerX()) * edgeLength.toFloat()
+        val y = (surfaceLoc.coords.y + surfaceLoc.face.centerY()) * edgeLength.toFloat()
+        return Vector2(x, y)
+    }
+
+    private fun addVector(hexCoords: Vector2, vector: Vector2): Vector2? {
+        val surfaceLocIn = hexCoords2SurfaceLoc(hexCoords)
+        val surfaceLocOut = surfaceLocIn.add(vector.cpy().scl(1f / edgeLength.toFloat()))
+        val output = if (surfaceLocOut == null) null else {
+            surfaceLoc2HexCoords(surfaceLocOut)
+        }
+        return output
+    }
+
+    fun neighbouringHexCoords(hexCoords: Vector2): List<Vector2> {
+        return listOf(
+                Vector2(1f, 0f),
+                Vector2(1f, 1f),
+                Vector2(0f, 1f),
+                Vector2(-1f, 0f),
+                Vector2(-1f, -1f),
+                Vector2(0f, -1f)
+        ).map{
+            addVector(hexCoords, it)
+        }.filterNotNull()
+    }
+
+    fun outerNeighbouringHexCoords(hexCoords: Vector2): List<Vector2> {
+        return listOf(
+                Vector2(2f, 1f),
+                Vector2(1f, 2f),
+                Vector2(-1f, 1f),
+                Vector2(-2f, -1f),
+                Vector2(-1f, -2f),
+                Vector2(1f, -1f),
+        ).map{
+            addVector(hexCoords, it)
+        }.filterNotNull()
     }
 }
