@@ -374,6 +374,77 @@ private class SurfaceLocation(val face: Face, val coords: Vector2) {
             }
         }
     }
+
+    /**
+     * Interpolate vectors v1, v2 and v3 with weightings w1, w2 and w3, respectively
+     */
+    private fun interpolateVertices(v1: Vector3, v2: Vector3, v3: Vector3, w1: Float, w2: Float, w3: Float): Vector3 {
+        val total = w1 + w2 + w3
+        return (
+                v1.scl(w1 / total)
+        ).add(
+                v2.scl(w2 / total)
+        ).add(
+                v3.scl(w3 / total)
+        )
+    }
+
+    private fun projectOntoSphere(position: Vector3): Vector3 {
+        return position.nor().scl(circumradius)
+    }
+
+    fun getWorldCoords(): Vector3 {
+        val tileIdx = face.longitude
+        val x_dist = 2f * coords.x - coords.y
+        val y_dist = 2f * coords.y - coords.x
+        val z_dist = -(coords.x + coords.y)
+        return when (face.latitude) {
+            Face.Latitude.POLAR_SOUTH -> {
+                val leftVertex = lowerVertices[unsignedMod(tileIdx, 5)]
+                val rightVertex = lowerVertices[unsignedMod(tileIdx + 1, 5)]
+                val otherVertex = bottomVertex
+                projectOntoSphere(
+                        interpolateVertices(
+                                leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
+                                (1f + x_dist), (1f + y_dist), (1f + z_dist),
+                        )
+                )
+            }
+            Face.Latitude.POLAR_NORTH -> {
+                val leftVertex = upperVertices[unsignedMod(tileIdx, 5)]
+                val rightVertex = upperVertices[unsignedMod(tileIdx + 1, 5)]
+                val otherVertex = topVertex
+                projectOntoSphere(
+                        interpolateVertices(
+                                leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
+                                (1f - y_dist), (1f - x_dist), (1f - z_dist),
+                        )
+                )
+            }
+            Face.Latitude.EQUATORIAL_SOUTH -> {
+                val leftVertex = lowerVertices[unsignedMod(tileIdx, 5)]
+                val rightVertex = lowerVertices[unsignedMod(tileIdx + 1, 5)]
+                val otherVertex = upperVertices[unsignedMod(tileIdx + 1, 5)]
+                projectOntoSphere(
+                        interpolateVertices(
+                                leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
+                                (1f - y_dist), (1f - x_dist), (1f - z_dist),
+                        )
+                )
+            }
+            Face.Latitude.EQUATORIAL_NORTH -> {
+                val leftVertex = upperVertices[unsignedMod(tileIdx, 5)]
+                val rightVertex = upperVertices[unsignedMod(tileIdx + 1, 5)]
+                val otherVertex = lowerVertices[unsignedMod(tileIdx, 5)]
+                projectOntoSphere(
+                        interpolateVertices(
+                                leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
+                                (1f + x_dist), (1f + y_dist), (1f + z_dist),
+                        )
+                )
+            }
+        }
+    }
 }
 
 
@@ -484,29 +555,6 @@ class HexMath3D(nTilesApprox: Int) {
         return vectors
     }
 
-    private fun interpolateVertices(left: Vector3, right: Vector3, other: Vector3, x: Float, y: Float): Vector3 {
-        val yRatio = y / (edgeLength * 1.5f)
-        val leftEdgeRatio = (1 - yRatio + x / edgeLength) * 0.5f
-        val rightEdgeRatio = (1 - yRatio - x / edgeLength) * 0.5f
-        return (
-            right.scl(leftEdgeRatio)
-        ).add(
-            left.scl(rightEdgeRatio)
-        ).add(
-            other.scl(yRatio)
-        )
-    }
-
-    private fun projectOntoSphere(position: Vector3): Vector3 {
-        return position.nor().scl(circumradius)
-    }
-
-    private fun hex2LatLong(hexCoords: Vector2): Pair<Int, Int> {
-        val latitude = hexCoords.x + hexCoords.y
-        val longitude = hexCoords.y - hexCoords.x
-        return Pair(latitude.roundToInt(), longitude.roundToInt())
-    }
-
     private fun latLong2Hex(latitude: Int, longitude: Int): Vector2 {
         val x = 0.5f * (latitude.toFloat() - longitude.toFloat())
         val y = 0.5f * (latitude.toFloat() + longitude.toFloat())
@@ -514,73 +562,7 @@ class HexMath3D(nTilesApprox: Int) {
     }
 
     fun hex2WorldCoords(hexCoords: Vector2): Vector3 {
-
-        val (latitude, longitude) = hex2LatLong(hexCoords)
-
-        val nearSouthPole = latitude < (3 * edgeLength)
-        val nearNorthPole = latitude > (6 * edgeLength)
-
-        return when {
-            nearSouthPole -> {
-                val tileIdx = unsignedMod(integerDiv(longitude + (5 * edgeLength), (2 * edgeLength)), 5)
-                val leftVertex = lowerVertices[tileIdx % 5]
-                val rightVertex = lowerVertices[(tileIdx + 1) % 5]
-                val otherVertex = bottomVertex
-                val xOffset = signedMod(longitude, 2 * edgeLength)
-                projectOntoSphere(
-                        interpolateVertices(
-                                leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
-                                xOffset.toFloat(),
-                                0.5f * ((3 * edgeLength) - latitude).toFloat()
-                        )
-                )
-            }
-            nearNorthPole -> {
-                val tileIdx = unsignedMod(integerDiv(longitude + (6 * edgeLength), (2 * edgeLength)), 5)
-                val leftVertex = upperVertices[tileIdx % 5]
-                val rightVertex = upperVertices[(tileIdx + 1) % 5]
-                val otherVertex = topVertex
-                val xOffset = signedMod(longitude + edgeLength, 2 * edgeLength)
-                projectOntoSphere(
-                        interpolateVertices(
-                                leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
-                                xOffset.toFloat(),
-                                0.5f * (latitude - (6 * edgeLength)).toFloat()
-                        )
-                )
-            }
-            else -> {
-                val xOffset = signedMod(longitude, 2 * edgeLength)
-                val distBelowUpperCircle = (6 * edgeLength - latitude)
-                if ((3 * xOffset < distBelowUpperCircle) && (3 * xOffset >= -distBelowUpperCircle)) {
-                    val tileIdx = unsignedMod(integerDiv(longitude + (5 * edgeLength), (2 * edgeLength)), 5)
-                    val leftVertex = lowerVertices[tileIdx % 5]
-                    val rightVertex = lowerVertices[(tileIdx + 1) % 5]
-                    val otherVertex = upperVertices[(tileIdx + 1) % 5]
-                    val xOffset = signedMod(longitude, 2 * edgeLength)
-                    projectOntoSphere(
-                            interpolateVertices(
-                                    leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
-                                    xOffset.toFloat(),
-                                    0.5f * (latitude - (3 * edgeLength)).toFloat()
-                            )
-                    )
-                } else {
-                    val tileIdx = unsignedMod(integerDiv(longitude + (6 * edgeLength), (2 * edgeLength)), 5)
-                    val leftVertex = upperVertices[tileIdx % 5]
-                    val rightVertex = upperVertices[(tileIdx + 1) % 5]
-                    val otherVertex = lowerVertices[tileIdx % 5]
-                    val xOffset = signedMod(longitude + edgeLength, 2 * edgeLength)
-                    projectOntoSphere(
-                            interpolateVertices(
-                                    leftVertex.cpy(), rightVertex.cpy(), otherVertex.cpy(),
-                                    xOffset.toFloat(),
-                                    0.5f * ((6 * edgeLength) - latitude).toFloat()
-                            )
-                    )
-                }
-            }
-        }
+        return hexCoords2SurfaceLoc(hexCoords).getWorldCoords()
     }
 
     private fun hexCoords2SurfaceLoc(hexCoords: Vector2): SurfaceLocation {
