@@ -596,6 +596,10 @@ class HexMath3D(nTilesApprox: Int) {
         return output
     }
 
+    fun hexCoordsOffset(hexCoords: Vector2, dx: Float, dy: Float): Vector2? {
+        return addVector(hexCoords, Vector2(dx, dy))
+    }
+
     fun neighbouringHexCoords(hexCoords: Vector2): List<Vector2> {
         return listOf(
                 Vector2(1f, 0f),
@@ -620,5 +624,15 @@ class HexMath3D(nTilesApprox: Int) {
         ).map{
             addVector(hexCoords, it)
         }.filterNotNull()
+    }
+
+    fun isVertex(hexCoords: Vector2): Boolean {
+        val x = hexCoords.x.roundToInt()
+        val y = hexCoords.y.roundToInt()
+        return (
+            (unsignedMod(x, edgeLength) == 0)
+            && (unsignedMod(y, edgeLength) == 0)
+            && (unsignedMod(x + y, 3 * edgeLength) == 0)
+        )
     }
 }
