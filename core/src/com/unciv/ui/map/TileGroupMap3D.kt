@@ -31,112 +31,199 @@ val maxAbsCameraElevation = 80f * (PI.toFloat() / 180f)
 val cameraFieldOfViewYDeg = 67f
 val cameraHeightDistanceRatio = 2f * tan(cameraFieldOfViewYDeg * (PI.toFloat() / 180f) / 2f)
 
+/**
+ * Define key points for mapping a hexagonal tile.
+ * 'pCenter' is the center of the hexagon.
+ * 'pTop' and 'pBottom' define the centers of the top and bottom edges of the hexagon.
+ * The vertices are named according to positions on a clock face.
+ */
+data class HexagonPoints<T>(val pCenter: T, val pTop: T, val pBottom: T, val p1: T, val p3: T, val p5: T, val p7: T, val p9: T, val p11: T)
+
+abstract class TilePoints<T>(hexPoints: HexagonPoints<T>, val topStretchFactor: Float) {
+    val pCenter = hexPoints.pCenter
+    val pTop = hexPoints.pTop
+    val pBottom = hexPoints.pBottom
+    val p1 = hexPoints.p1
+    val p3 = hexPoints.p3
+    val p5 = hexPoints.p5
+    val p7 = hexPoints.p7
+    val p9 = hexPoints.p9
+    val p11 = hexPoints.p11
+    abstract val p1Outer: T
+    abstract val p11Outer: T
+    abstract val pTopOuter: T
+    abstract val pTopLeftOuter: T
+    abstract val pTopRightOuter: T
+}
+
+class WorldTilePoints(hexPoints: HexagonPoints<Vector3>, topStretchFactor: Float) : TilePoints<Vector3>(hexPoints, topStretchFactor) {
+    override val p1Outer = p1.cpy().sub(pCenter).scl(topStretchFactor).add(pCenter)
+    override val p11Outer = p11.cpy().sub(pCenter).scl(topStretchFactor).add(pCenter)
+    override val pTopOuter = pTop.cpy().sub(pCenter).scl(topStretchFactor).add(pCenter)
+    override val pTopLeftOuter = p9.cpy().sub(pCenter).scl(1f - (0.5f * topStretchFactor)).add(p11Outer)
+    override val pTopRightOuter = p3.cpy().sub(pCenter).scl(1f - (0.5f * topStretchFactor)).add(p1Outer)
+}
+
+class TextureTilePoints(hexPoints: HexagonPoints<Vector2>, topStretchFactor: Float) : TilePoints<Vector2>(hexPoints, topStretchFactor) {
+    override val p1Outer = p1.cpy().sub(pCenter).scl(topStretchFactor).add(pCenter)
+    override val p11Outer = p11.cpy().sub(pCenter).scl(topStretchFactor).add(pCenter)
+    override val pTopOuter = pTop.cpy().sub(pCenter).scl(topStretchFactor).add(pCenter)
+    override val pTopLeftOuter = p9.cpy().sub(pCenter).scl(1f - (0.5f * topStretchFactor)).add(p11Outer)
+    override val pTopRightOuter = p3.cpy().sub(pCenter).scl(1f - (0.5f * topStretchFactor)).add(p1Outer)
+}
+
+class TileVertexInfo(world: WorldTilePoints, texture: TextureTilePoints) {
+    val pCenter = vertex(world.pCenter, texture.pCenter)
+    val pTop = vertex(world.pTop, texture.pTop)
+    val pBottom = vertex(world.pBottom, texture.pBottom)
+    val p1 = vertex(world.p1, texture.p1)
+    val p3 = vertex(world.p3, texture.p3)
+    val p5 = vertex(world.p5, texture.p5)
+    val p7 = vertex(world.p7, texture.p7)
+    val p9 = vertex(world.p9, texture.p9)
+    val p11 = vertex(world.p11, texture.p11)
+    val p1Outer = vertex(world.p1Outer, texture.p1Outer)
+    val p11Outer = vertex(world.p11Outer, texture.p11Outer)
+    val pTopOuter = vertex(world.pTopOuter, texture.pTopOuter)
+    val pTopLeftOuter = vertex(world.pTopLeftOuter, texture.pTopLeftOuter)
+    val pTopRightOuter = vertex(world.pTopRightOuter, texture.pTopRightOuter)
+
+    private fun vertex(worldPoint: Vector3, texturePoint: Vector2): VertexInfo {
+        return VertexInfo().setPos(worldPoint).setUV(texturePoint)
+    }
+}
 
 class HexagonalTileMesh(private val hexMap: HexMath3D, private val hexCoords: Vector2) {
 
-    // Central hexagon center
-    private val p_center = hexMap.hex2WorldCoords(hexCoords)
+    private val worldHexagonPoints = calcWorldHexagonPoints()
 
-    // Adjacent hexagon centers
-    private val p_0_outer =  worldCoordsOffset(1f, 1f)
-    private val p_2_outer =  worldCoordsOffset(0f, 1f)
-    private val p_4_outer =  worldCoordsOffset(-1f, 0f)
-    private val p_6_outer =  worldCoordsOffset(-1f, -1f)
-    private val p_8_outer =  worldCoordsOffset(0f, -1f)
-    private val p_10_outer =  worldCoordsOffset(1f, 0f)
+    private fun calcWorldHexagonPoints(): HexagonPoints<Vector3> {
+        // Central hexagon center
+        val pCenter = hexMap.hex2WorldCoords(hexCoords)
 
-    // Interpolated vertices
-    private val p_1_outer = sphericalAverage(worldCoordsOffset(1f, 2f), p_0_outer, p_2_outer)
-    private val p_1_inner = sphericalAverage(p_center, p_0_outer, p_2_outer)
-    private val p_3_inner = sphericalAverage(p_center, p_2_outer, p_4_outer)
-    private val p_5_inner = sphericalAverage(p_center, p_4_outer, p_6_outer)
-    private val p_7_inner = sphericalAverage(p_center, p_6_outer, p_8_outer)
-    private val p_9_inner = sphericalAverage(p_center, p_8_outer, p_10_outer)
-    private val p_11_inner = sphericalAverage(p_center, p_10_outer, p_0_outer)
-    private val p_11_outer = sphericalAverage(worldCoordsOffset(2f, 1f), p_10_outer, p_0_outer)
+        // Adjacent hexagon centers (only 12 and 6 o'clock positions can be null)
+        val p0 =  worldCoordsOffset(1f, 1f)
+        val p2 =  worldCoordsOffset(0f, 1f)!!
+        val p4 =  worldCoordsOffset(-1f, 0f)!!
+        val p6 =  worldCoordsOffset(-1f, -1f)
+        val p8 =  worldCoordsOffset(0f, -1f)!!
+        val p10 =  worldCoordsOffset(1f, 0f)!!
 
-    private fun worldCoordsOffset(dx: Float, dy: Float): Vector3 {
-        val offsetHexCoords = hexMap.hexCoordsOffset(hexCoords, dx, dy)!!
-        return hexMap.hex2WorldCoords(offsetHexCoords)
+        // Interpolate to get vertices
+        return when {
+            (p0 == null) -> {
+                // Top 3 vertices merge to 2
+                val pTop = sphericalAverage(pCenter, p2, p10)
+                val p3 = sphericalAverage(pCenter, p2, p4)
+                val p5 = sphericalAverage(pCenter, p4, p6!!)
+                val p7 = sphericalAverage(pCenter, p6!!, p8)
+                val p9 = sphericalAverage(pCenter, p8, p10)
+                HexagonPoints(
+                        pCenter,
+                        pTop,
+                        linearAverage(p5, p7),
+                        p3.cpy().lerp(pTop, 2f / 3f),
+                        p3, p5, p7, p9,
+                        p9.cpy().lerp(pTop, 2f / 3f)
+                )
+            }
+            (p6 == null) -> {
+                // Bottom 3 vertices merge to 2
+                val pBottom = sphericalAverage(pCenter, p4, p8)
+                val p1 = sphericalAverage(pCenter, p0, p2)
+                val p3 = sphericalAverage(pCenter, p2, p4)
+                val p9 = sphericalAverage(pCenter, p8, p10)
+                val p11 = sphericalAverage(pCenter, p10, p0)
+                HexagonPoints(
+                        pCenter,
+                        linearAverage(p1, p11),
+                        pBottom,
+                        p1, p3,
+                        p3.cpy().lerp(pBottom, 2f / 3f),
+                        p9.cpy().lerp(pBottom, 2f / 3f),
+                        p9, p11
+                )
+            }
+            else -> {
+                val p1 = sphericalAverage(pCenter, p0, p2)
+                val p3 = sphericalAverage(pCenter, p2, p4)
+                val p5 = sphericalAverage(pCenter, p4, p6)
+                val p7 = sphericalAverage(pCenter, p6, p8)
+                val p9 = sphericalAverage(pCenter, p8, p10)
+                val p11 = sphericalAverage(pCenter, p10, p0)
+                HexagonPoints(
+                        pCenter,
+                        linearAverage(p1, p11),
+                        linearAverage(p5, p7),
+                        p1, p3, p5, p7, p9, p11
+                )
+            }
+        }
+    }
+
+    private fun worldCoordsOffset(dx: Float, dy: Float): Vector3? {
+        val offsetHexCoords = hexMap.hexCoordsOffset(hexCoords, dx, dy)
+        return if (offsetHexCoords == null) null else hexMap.hex2WorldCoords(offsetHexCoords)
+    }
+
+    private fun linearAverage(v1: Vector2, v2: Vector2): Vector2 {
+        return v1.cpy().add(v2).scl(0.5f)
+    }
+
+    private fun linearAverage(v1: Vector3, v2: Vector3): Vector3 {
+        return v1.cpy().add(v2).scl(0.5f)
     }
 
     private fun sphericalAverage(v1: Vector3, v2: Vector3, v3: Vector3): Vector3 {
         return v1.cpy().add(v2).add(v3).scl(1f / 3f).nor().scl(v1.len())
     }
 
-    /**
-     * Elevate a surface vector by a given amount, specified as a fraction of the globe radius.
-     */
-    private fun elevate(vec: Vector3, fraction: Float): Vector3 {
-        return vec.cpy().scl(1f + fraction)
+    private fun calcTextureHexagonPoints(region: TextureRegion): HexagonPoints<Vector2> {
+        val radius = 0.5f * (region.getU2() - region.getU())
+        val pCenter = Vector2(
+                region.getU() + radius,
+                region.getV2() - radius * sqrt(3f) / 2f
+        )
+        val p1 = Vector2(radius, 0f).rotateDeg(-60f).add(pCenter)
+        val p3 = Vector2(radius, 0f).rotateDeg(0f).add(pCenter)
+        val p5 = Vector2(radius, 0f).rotateDeg(60f).add(pCenter)
+        val p7 = Vector2(radius, 0f).rotateDeg(120f).add(pCenter)
+        val p9 = Vector2(radius, 0f).rotateDeg(180f).add(pCenter)
+        val p11 = Vector2(radius, 0f).rotateDeg(-120f).add(pCenter)
+        return HexagonPoints(
+                pCenter,
+                linearAverage(p1, p11),
+                linearAverage(p5, p7),
+                p1, p3, p5, p7, p9, p11
+        )
     }
 
     fun addTexture(meshBuilder: MeshPartBuilder, region: TextureRegion) {
-        val textureRadius = 0.5f * (region.getU2() - region.getU())
-        val t_center = Vector2(
-                region.getU() + textureRadius,
-                region.getV2() - textureRadius * sqrt(3f) / 2f
-        )
-        val overflowRatio = min(1f, max(0f, ((t_center.y - region.getV()) / (region.getV2() - t_center.y)) - 1f))
 
-        val t_1_inner = Vector2(textureRadius, 0f).rotateDeg(-60f).add(t_center)
-        val t_3_inner = Vector2(textureRadius, 0f).rotateDeg(0f).add(t_center)
-        val t_5_inner = Vector2(textureRadius, 0f).rotateDeg(60f).add(t_center)
-        val t_7_inner = Vector2(textureRadius, 0f).rotateDeg(120f).add(t_center)
-        val t_9_inner = Vector2(textureRadius, 0f).rotateDeg(180f).add(t_center)
-        val t_11_inner = Vector2(textureRadius, 0f).rotateDeg(-120f).add(t_center)
+        val textureHexagonPoints = calcTextureHexagonPoints(region)
 
-        val t_9_0 = Vector2(region.getU(), region.getV2() - textureRadius * sqrt(3f))
-        val t_3_0 = Vector2(region.getU2(), region.getV2() - textureRadius * sqrt(3f))
-        val t_9_0_0 = Vector2(region.getU(), region.getV())
-        val t_3_0_0 = Vector2(region.getU2(), region.getV())
-        val t_11_11 = t_11_inner.cpy().add(t_11_inner.cpy().sub(t_center).scl(overflowRatio))
-        val t_1_1 = t_1_inner.cpy().add(t_1_inner.cpy().sub(t_center).scl(overflowRatio))
-        val t_11_1 = t_11_inner.cpy().add(t_1_inner.cpy().sub(t_center).scl(overflowRatio))
-        val t_1_11 = t_1_inner.cpy().add(t_11_inner.cpy().sub(t_center).scl(overflowRatio))
+        val topHeight = (textureHexagonPoints.pCenter.y - region.getV())
+        val bottomHeight = (region.getV2() - textureHexagonPoints.pCenter.y)
+        val topStretchFactor = min(2f, max(1f, topHeight / bottomHeight))
 
-        val p_9_0 = p_11_inner.cpy().lerp(p_10_outer, 0.5f)
-        val p_3_0 = p_1_inner.cpy().lerp(p_2_outer, 0.5f)
-        val p_9_0_0 = p_9_0.cpy().lerp(p_11_outer, overflowRatio)
-        val p_3_0_0 = p_3_0.cpy().lerp(p_1_outer, overflowRatio)
-        val p_11_11 = p_11_inner.cpy().lerp(p_11_outer, overflowRatio)
-        val p_1_1 = p_1_inner.cpy().lerp(p_1_outer, overflowRatio)
-        val p_11_1 = p_11_inner.cpy().lerp(p_0_outer, overflowRatio)
-        val p_1_11 = p_1_inner.cpy().lerp(p_0_outer, overflowRatio)
+        val worldTilePoints = WorldTilePoints(worldHexagonPoints, topStretchFactor)
+        val textureTilePoints = TextureTilePoints(textureHexagonPoints, topStretchFactor)
 
-        val v_center = VertexInfo().setPos(p_center).setUV(t_center)
-        val v_1_inner = VertexInfo().setPos(p_1_inner).setUV(t_1_inner)
-        val v_3_inner = VertexInfo().setPos(p_3_inner).setUV(t_3_inner)
-        val v_5_inner = VertexInfo().setPos(p_5_inner).setUV(t_5_inner)
-        val v_7_inner = VertexInfo().setPos(p_7_inner).setUV(t_7_inner)
-        val v_9_inner = VertexInfo().setPos(p_9_inner).setUV(t_9_inner)
-        val v_11_inner = VertexInfo().setPos(p_11_inner).setUV(t_11_inner)
+        val vi = TileVertexInfo(worldTilePoints, textureTilePoints)
 
-        val v_9_0 = VertexInfo().setPos(elevate(p_9_0, 1e-4f)).setUV(t_9_0)
-        val v_3_0 = VertexInfo().setPos(elevate(p_3_0, 1e-4f)).setUV(t_3_0)
-        val v_9_0_0 = VertexInfo().setPos(elevate(p_9_0_0, 1e-4f)).setUV(t_9_0_0)
-        val v_3_0_0 = VertexInfo().setPos(elevate(p_3_0_0, 1e-4f)).setUV(t_3_0_0)
-        val v_11_11 = VertexInfo().setPos(elevate(p_11_11, 1e-4f)).setUV(t_11_11)
-        val v_1_1 = VertexInfo().setPos(elevate(p_1_1, 1e-4f)).setUV(t_1_1)
-        val v_11_1 = VertexInfo().setPos(elevate(p_11_1, 1e-4f)).setUV(t_11_1)
-        val v_1_11 = VertexInfo().setPos(elevate(p_1_11, 1e-4f)).setUV(t_1_11)
+        meshBuilder.triangle(vi.pCenter, vi.p1, vi.pTop)
+        meshBuilder.triangle(vi.pCenter, vi.p3, vi.p1)
+        meshBuilder.triangle(vi.pCenter, vi.p5, vi.p3)
+        meshBuilder.triangle(vi.pCenter, vi.pBottom, vi.p5)
+        meshBuilder.triangle(vi.pCenter, vi.p7, vi.pBottom)
+        meshBuilder.triangle(vi.pCenter, vi.p9, vi.p7)
+        meshBuilder.triangle(vi.pCenter, vi.p11, vi.p9)
+        meshBuilder.triangle(vi.pCenter, vi.pTop, vi.p11)
 
-        meshBuilder.triangle(v_center, v_3_inner, v_1_inner)
-        meshBuilder.triangle(v_center, v_5_inner, v_3_inner)
-        meshBuilder.triangle(v_center, v_7_inner, v_5_inner)
-        meshBuilder.triangle(v_center, v_9_inner, v_7_inner)
-        meshBuilder.triangle(v_center, v_11_inner, v_9_inner)
-        meshBuilder.triangle(v_center, v_1_inner, v_11_inner)
-
-        meshBuilder.triangle(v_9_inner, v_11_inner, v_9_0)
-        meshBuilder.triangle(v_3_inner, v_3_0, v_1_inner)
-        meshBuilder.triangle(v_11_inner, v_9_0_0, v_9_0)
-        meshBuilder.triangle(v_1_inner, v_3_0, v_3_0_0)
-        meshBuilder.triangle(v_11_inner, v_11_11, v_9_0_0)
-        meshBuilder.triangle(v_1_inner, v_3_0_0, v_1_1)
-        meshBuilder.triangle(v_11_inner, v_11_1, v_11_11)
-        meshBuilder.triangle(v_1_inner, v_1_1, v_1_11)
-        meshBuilder.rect(v_1_inner, v_1_11, v_11_1, v_11_inner)
+        meshBuilder.rect(vi.p9, vi.p11, vi.p11Outer, vi.pTopLeftOuter)
+        meshBuilder.rect(vi.p3, vi.pTopRightOuter, vi.p1Outer, vi.p1)
+        meshBuilder.rect(vi.p1, vi.p1Outer, vi.pTopOuter, vi.pTop)
+        meshBuilder.rect(vi.pTop, vi.pTopOuter, vi.p11Outer, vi.p11)
     }
 }
 
@@ -196,15 +283,11 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
         )
         for(tileGroup in tileGroups.reversed()) {
             val hexMap = tileGroup.tileInfo.tileMap.hexMap
-            if (hexMap.isVertex(tileGroup.tileInfo.position)) {
-                // TODO: Implement
-            } else {
-                val tileMesh = HexagonalTileMesh(hexMap, tileGroup.tileInfo.position)
-                val locations = tileGroup.getTileBaseImageLocations(null)
-                for (location in locations) {
-                    val region = atlas.findRegion(location)
-                    tileMesh.addTexture(meshBuilder, region)
-                }
+            val tileMesh = HexagonalTileMesh(hexMap, tileGroup.tileInfo.position)
+            val locations = tileGroup.getTileBaseImageLocations(null)
+            for (location in locations) {
+                val region = atlas.findRegion(location)
+                tileMesh.addTexture(meshBuilder, region)
             }
         }
         val model = modelBuilder.end()
