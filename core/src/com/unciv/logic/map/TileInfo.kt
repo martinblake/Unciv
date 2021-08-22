@@ -3,7 +3,6 @@
 import com.badlogic.gdx.math.Vector2
 import com.unciv.Constants
 import com.unciv.UncivGame
-import com.unciv.logic.HexMath
 import com.unciv.logic.city.CityInfo
 import com.unciv.logic.civilization.CivilizationInfo
 import com.unciv.models.ruleset.Ruleset
@@ -82,9 +81,9 @@ open class TileInfo {
     var hasBottomLeftRiver = false
 
     val latitude: Float
-        get() = HexMath.getLatitude(position)
+        get() = tileMap.hexMath.getLatitude(position)
     val longitude: Float
-        get() = HexMath.getLongitude(position)
+        get() = tileMap.hexMath.getLongitude(position)
 
     fun clone(): TileInfo {
         val toReturn = TileInfo()

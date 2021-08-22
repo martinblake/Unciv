@@ -43,6 +43,7 @@ class RiverGenerator(val randomness: MapGenerationRandomness) {
     }
 
     private fun spawnRiver(initialPosition: TileInfo, map: TileMap) {
+
         // Recommendation: Draw a bunch of hexagons on paper before trying to understand this, it's super helpful!
         val endPosition = getClosestWaterTile(initialPosition)
 
@@ -85,11 +86,11 @@ class RiverGenerator(val randomness: MapGenerationRandomness) {
     fun getAdjacentTiles(riverCoordinate: RiverCoordinate, map: TileMap): Sequence<TileInfo> {
         val potentialPositions = sequenceOf(
                 riverCoordinate.position,
-                riverCoordinate.position.cpy().add(-1f, -1f), // tile directly below us,
+                map.hexMath.getNeighborInClockDirection(riverCoordinate.position, 6), // tile directly below us,
                 if (riverCoordinate.bottomRightOrLeft == RiverCoordinate.BottomRightOrLeft.BottomLeft)
-                    riverCoordinate.position.cpy().add(0f, -1f) // tile to our bottom-left
-                else riverCoordinate.position.cpy().add(-1f, 0f) // tile to our bottom-right
-        )
+                    map.hexMath.getNeighborInClockDirection(riverCoordinate.position, 8) // tile to our bottom-left
+                else map.hexMath.getNeighborInClockDirection(riverCoordinate.position, 4) // tile to our bottom-right
+        ).filterNotNull()
         return potentialPositions.map { if (map.contains(it)) map[it] else null }.filterNotNull()
     }
 

@@ -282,7 +282,7 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
                 Material()
         )
         for(tileGroup in tileGroups.reversed()) {
-            val hexMap = tileGroup.tileInfo.tileMap.hexMap
+            val hexMap = tileGroup.tileInfo.tileMap.hexMath3d
             val tileMesh = HexagonalTileMesh(hexMap, tileGroup.tileInfo.position)
             val locations = tileGroup.getTileBaseImageLocations(null)
             for (location in locations) {

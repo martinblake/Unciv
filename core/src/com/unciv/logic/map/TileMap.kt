@@ -5,7 +5,7 @@ import com.unciv.Constants
 import com.unciv.logic.GameInfo
 import com.unciv.logic.HexMath
 import com.unciv.logic.HexMath3D
-import com.unciv.logic.map.MapSizeNew
+import com.unciv.logic.HexMathBase
 import com.unciv.logic.civilization.CivilizationInfo
 import com.unciv.models.metadata.Player
 import com.unciv.models.ruleset.Nation
@@ -27,7 +27,7 @@ class TileMap {
     var bottomY = 0
 
     @Transient
-    lateinit var hexMap: HexMath3D
+    lateinit var hexMath3d: HexMath3D
 
     @delegate:Transient
     val maxLatitude: Float by lazy { if (values.isEmpty()) 0f else values.map { abs(it.latitude) }.maxOrNull()!! }
@@ -44,6 +44,9 @@ class TileMap {
 
     val values: Collection<TileInfo>
         get() = tileList
+
+    val hexMath: HexMathBase
+        get() = if (mapParameters.shape == MapShape.spherical) hexMath3d else HexMath
 
     /** for json parsing, we need to have a default constructor */
     constructor()
@@ -91,8 +94,8 @@ class TileMap {
     }
 
     /** generates a spherical map approximated by an icosahedron of given edge length */
-    private fun generateSphericalMap(hexMap: HexMath3D) {
-        for (vector in hexMap.getAllVectors())
+    private fun generateSphericalMap(hexMath3d: HexMath3D) {
+        for (vector in hexMath3d.getAllVectors())
             tileList.add(TileInfo().apply {
                 position = vector;
                 baseTerrain = Constants.grassland
@@ -126,44 +129,23 @@ class TileMap {
         return get(vector.x.toInt(), vector.y.toInt())
     }
 
-    fun getTilesInDistance(origin: Vector2, distance: Int): Sequence<TileInfo> =
-            getTilesInDistanceRange(origin, 0..distance)
+    fun getTilesInDistance(origin: Vector2, distance: Int): Sequence<TileInfo> {
+        return hexMath.getVectorsInDistance(origin, distance, false).asSequence().map {
+            getIfTileExistsOrNull(it.x.toInt(), it.y.toInt())
+        }.filterNotNull()
+    }
 
-    fun getTilesInDistanceRange(origin: Vector2, range: IntRange): Sequence<TileInfo> =
-            range.asSequence().flatMap { getTilesAtDistance(origin, it) }
+    fun getTilesInDistanceRange(origin: Vector2, range: IntRange): Sequence<TileInfo> {
+        return hexMath.getVectorsInDistanceRange(origin, range, false).asSequence().map {
+            getIfTileExistsOrNull(it.x.toInt(), it.y.toInt())
+        }.filterNotNull()
+    }
 
-    fun getTilesAtDistance(origin: Vector2, distance: Int): Sequence<TileInfo> =
-            if (distance <= 0) // silently take negatives.
-                sequenceOf(get(origin))
-            else
-                sequence {
-                    val centerX = origin.x.toInt()
-                    val centerY = origin.y.toInt()
-
-                    // Start from 6 O'clock point which means (-distance, -distance) away from the center point
-                    var currentX = centerX - distance
-                    var currentY = centerY - distance
-
-                    for (i in 0 until distance) { // From 6 to 8
-                        yield(getIfTileExistsOrNull(currentX, currentY))
-                        // We want to get the tile on the other side of the clock,
-                        // so if we're at current = origin-delta we want to get to origin+delta.
-                        // The simplest way to do this is 2*origin - current = 2*origin- (origin - delta) = origin+delta
-                        yield(getIfTileExistsOrNull(2 * centerX - currentX, 2 * centerY - currentY))
-                        currentX += 1 // we're going upwards to the left, towards 8 o'clock
-                    }
-                    for (i in 0 until distance) { // 8 to 10
-                        yield(getIfTileExistsOrNull(currentX, currentY))
-                        yield(getIfTileExistsOrNull(2 * centerX - currentX, 2 * centerY - currentY))
-                        currentX += 1
-                        currentY += 1 // we're going up the left side of the hexagon so we're going "up" - +1,+1
-                    }
-                    for (i in 0 until distance) { // 10 to 12
-                        yield(getIfTileExistsOrNull(currentX, currentY))
-                        yield(getIfTileExistsOrNull(2 * centerX - currentX, 2 * centerY - currentY))
-                        currentY += 1 // we're going up the top left side of the hexagon so we're heading "up and to the right"
-                    }
-                }.filterNotNull()
+    fun getTilesAtDistance(origin: Vector2, distance: Int): Sequence<TileInfo> {
+        return hexMath.getVectorsAtDistance(origin, distance, distance, false).asSequence().map {
+            getIfTileExistsOrNull(it.x.toInt(), it.y.toInt())
+        }.filterNotNull()
+    }
 
     private fun getIfTileExistsOrNull(x: Int, y: Int): TileInfo? {
         if (contains(x, y))
@@ -361,8 +343,7 @@ class TileMap {
             tileInfo.setUnitTransients(setUnitCivTransients)
         }
 
-        // Key dimension for spherical map shape
-        hexMap = HexMath3D(tileList.size)
+        hexMath3d = HexMath3D(tileList.size)
     }
 
     /**
@@ -374,22 +355,7 @@ class TileMap {
                 mapParameters.mapSize.width / 2
             else mapParameters.mapSize.radius
 
-        val xDifference = tile.position.x - otherTile.position.x
-        val yDifference = tile.position.y - otherTile.position.y
-        val xWrapDifferenceBottom = tile.position.x - (otherTile.position.x - radius)
-        val yWrapDifferenceBottom = tile.position.y - (otherTile.position.y - radius)
-        val xWrapDifferenceTop = tile.position.x - (otherTile.position.x + radius)
-        val yWrapDifferenceTop = tile.position.y - (otherTile.position.y + radius)
-
-        return when {
-            xDifference == 1f && yDifference == 1f -> 6 // otherTile is below
-            xDifference == -1f && yDifference == -1f -> 12 // otherTile is above
-            xDifference == 1f || xWrapDifferenceBottom == 1f -> 4 // otherTile is bottom-right
-            yDifference == 1f || yWrapDifferenceBottom == 1f -> 8 // otherTile is bottom-left
-            xDifference == -1f || xWrapDifferenceTop == -1f -> 10 // otherTile is top-left
-            yDifference == -1f || yWrapDifferenceTop == -1f -> 2 // otherTile is top-right
-            else -> -1
-        }
+        return hexMath.getNeighborTileClockPosition(tile.position, otherTile.position, radius)
     }
 
     /** Convert relative direction of otherTile seen from tile's position into a vector

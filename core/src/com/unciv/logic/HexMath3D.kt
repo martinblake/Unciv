@@ -491,7 +491,7 @@ private class SurfaceLocation(val face: Face, val coords: Vector2) {
  * (Note that `@` indicates vertices and `.` indicates edges, i.e. lines along which the net would
  *  be folded to form an icosahedron)
  */
-class HexMath3D(nTilesApprox: Int) {
+class HexMath3D(nTilesApprox: Int): HexMathBase {
 
     private val edgeLength = getIcosahedronEdgeLength(nTilesApprox)
 
@@ -527,6 +527,44 @@ class HexMath3D(nTilesApprox: Int) {
         }
     }
 
+    private fun mapToNet(hexCoords: Vector2): Vector2 {
+        val (lat, long) = hex2LatLong(hexCoords)
+        val maxLatitude = 9 * edgeLength
+        return when {
+            (lat == 0) -> {
+                latLong2Hex(0, 0)
+            }
+            (lat == maxLatitude) -> {
+                latLong2Hex(maxLatitude, -edgeLength)
+            }
+            (lat < (3 * edgeLength)) -> {
+                val faceOffset = signedMod(long, 2 * edgeLength)
+                if ((3 * faceOffset >= lat) || (3 * faceOffset < -lat)) {
+                    val faceLongitude = unsignedMod(
+                            integerDiv(long + (6 * edgeLength), 2 * edgeLength),
+                            5
+                    )
+                    latLong2Hex(lat, (2 * edgeLength * faceLongitude) - (4 * edgeLength) - (lat / 3))
+                } else {
+                    latLong2Hex(lat, long)
+                }
+            }
+            (lat > (6 * edgeLength)) -> {
+                val faceOffset = signedMod(long - edgeLength, 2 * edgeLength)
+                if ((3 * faceOffset >= (maxLatitude - lat)) || (3 * faceOffset < -(maxLatitude - lat))) {
+                    val faceLongitude = unsignedMod(
+                            integerDiv(long + (7 * edgeLength), 2 * edgeLength),
+                            5
+                    )
+                    latLong2Hex(lat, (2 * edgeLength * faceLongitude) - (5 * edgeLength) - ((maxLatitude - lat) / 3))
+                } else {
+                    latLong2Hex(lat, long)
+                }
+            }
+            else -> latLong2Hex(lat, long)
+        }
+    }
+
     private fun getMinLongitude(latitude: Int): Int {
         return ceil(-(4f * edgeLength) - (latitude / 3f)).toInt()
     }
@@ -553,6 +591,12 @@ class HexMath3D(nTilesApprox: Int) {
         }
         vectors.add(latLong2Hex(maxLatitude, -edgeLength))
         return vectors
+    }
+
+    private fun hex2LatLong(hexCoords: Vector2): Pair<Int, Int> {
+        val latitude = hexCoords.x + hexCoords.y
+        val longitude = hexCoords.y - hexCoords.x
+        return Pair(latitude.roundToInt(), longitude.roundToInt())
     }
 
     private fun latLong2Hex(latitude: Int, longitude: Int): Vector2 {
@@ -582,9 +626,9 @@ class HexMath3D(nTilesApprox: Int) {
     }
 
     private fun surfaceLoc2HexCoords(surfaceLoc: SurfaceLocation): Vector2 {
-        val x = (surfaceLoc.coords.x + surfaceLoc.face.centerX()) * edgeLength.toFloat()
-        val y = (surfaceLoc.coords.y + surfaceLoc.face.centerY()) * edgeLength.toFloat()
-        return Vector2(x, y)
+        val x = ((surfaceLoc.coords.x + surfaceLoc.face.centerX()) * edgeLength.toFloat())
+        val y = ((surfaceLoc.coords.y + surfaceLoc.face.centerY()) * edgeLength.toFloat())
+        return mapToNet(Vector2(x, y))
     }
 
     private fun addVector(hexCoords: Vector2, vector: Vector2): Vector2? {
@@ -608,7 +652,7 @@ class HexMath3D(nTilesApprox: Int) {
                 Vector2(-1f, 0f),
                 Vector2(-1f, -1f),
                 Vector2(0f, -1f)
-        ).map{
+        ).map {
             addVector(hexCoords, it)
         }.filterNotNull()
     }
@@ -621,18 +665,80 @@ class HexMath3D(nTilesApprox: Int) {
                 Vector2(-2f, -1f),
                 Vector2(-1f, -2f),
                 Vector2(1f, -1f),
-        ).map{
+        ).map {
             addVector(hexCoords, it)
         }.filterNotNull()
     }
 
-    fun isVertex(hexCoords: Vector2): Boolean {
-        val x = hexCoords.x.roundToInt()
-        val y = hexCoords.y.roundToInt()
-        return (
-            (unsignedMod(x, edgeLength) == 0)
-            && (unsignedMod(y, edgeLength) == 0)
-            && (unsignedMod(x + y, 3 * edgeLength) == 0)
-        )
+    override fun getLatitude(vector: Vector2): Float {
+        return vector.x + vector.y - (4.5f * edgeLength.toFloat())
+    }
+
+    override fun getLongitude(vector: Vector2): Float {
+        return vector.x - vector.y
+    }
+
+    override fun getVectorsAtDistance(origin: Vector2, distance: Int, maxDistance: Int, worldWrap: Boolean): List<Vector2> {
+        val vectorsWithinDistance = mutableListOf<Vector2>()
+        var vectorsAtDistance = listOf(origin.cpy())
+        for (i in 0 until distance) {
+            vectorsWithinDistance += vectorsAtDistance
+            vectorsAtDistance = vectorsAtDistance.flatMap {
+                neighbouringHexCoords(it)
+
+            }.filter {
+                !vectorsWithinDistance.contains(it)
+            }.distinct()
+        }
+        return vectorsAtDistance
+    }
+
+    override fun getVectorsInDistanceRange(origin: Vector2, range: IntRange, worldWrap: Boolean): List<Vector2> {
+        val vectorsWithinDistance = mutableListOf<Vector2>()
+        val vectorsInDistanceRange = mutableListOf<Vector2>()
+        var vectorsAtDistance = listOf(origin.cpy())
+        for (i in 0 until range.last) {
+            vectorsWithinDistance += vectorsAtDistance
+            if (i >= range.start) {
+                vectorsInDistanceRange += vectorsAtDistance
+            }
+            vectorsAtDistance = vectorsAtDistance.flatMap {
+                neighbouringHexCoords(it)
+            }.filter {
+                !vectorsWithinDistance.contains(it)
+            }.distinct()
+        }
+        if (range.last >= range.start) {
+            vectorsInDistanceRange += vectorsAtDistance
+        }
+        return vectorsInDistanceRange
+    }
+
+    override fun getVectorsInDistance(origin: Vector2, distance: Int, worldWrap: Boolean): List<Vector2> {
+        return getVectorsInDistanceRange(origin, 0..distance, worldWrap)
+    }
+
+    override fun getNeighborTileClockPosition(position: Vector2, otherPosition: Vector2, radius: Int): Int {
+        return when {
+            addVector(position, Vector2(0f, 1f)) == otherPosition -> 2
+            addVector(position, Vector2(-1f, 0f)) == otherPosition -> 4
+            addVector(position, Vector2(-1f, -1f)) == otherPosition -> 6
+            addVector(position, Vector2(0f, -1f)) == otherPosition -> 8
+            addVector(position, Vector2(1f, 0f)) == otherPosition -> 10
+            addVector(position, Vector2(1f, 1f)) == otherPosition -> 12
+            else -> -1
+        }
+    }
+
+    override fun getNeighborInClockDirection(position: Vector2, clockDirection: Int): Vector2? {
+        return when (clockDirection) {
+            2 -> Vector2(0f, 1f)
+            4 -> Vector2(-1f, 0f)
+            6 -> Vector2(-1f, -1f)
+            8 -> Vector2(0f, -1f)
+            10 -> Vector2(1f, 0f)
+            12 -> Vector2(1f, 1f)
+            else -> null
+        }?.let{ addVector(position, it) }
     }
 }

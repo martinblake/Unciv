@@ -452,7 +452,7 @@ class MapGenerator(val ruleset: Ruleset) {
 }
 
 class MapGenerationRandomness{
-    var RNG = Random(42)
+    var RNG = Random(System.currentTimeMillis())
 
     fun seedRNG(seed: Long = 42) {
         RNG = Random(seed)

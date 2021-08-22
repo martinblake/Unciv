@@ -4,8 +4,18 @@ import com.badlogic.gdx.math.Vector2
 import com.badlogic.gdx.math.Vector3
 import kotlin.math.*
 
+interface HexMathBase {
+    fun getLatitude(vector: Vector2): Float
+    fun getLongitude(vector: Vector2): Float
+    fun getVectorsAtDistance(origin: Vector2, distance: Int, maxDistance: Int, worldWrap: Boolean): List<Vector2>
+    fun getVectorsInDistanceRange(origin: Vector2, range: IntRange, worldWrap: Boolean): List<Vector2>
+    fun getVectorsInDistance(origin: Vector2, distance: Int, worldWrap: Boolean): List<Vector2>
+    fun getNeighborTileClockPosition(position: Vector2, otherPosition: Vector2, radius: Int): Int
+    fun getNeighborInClockDirection(position: Vector2, clockDirection: Int): Vector2?
+}
+
 @Suppress("MemberVisibilityCanBePrivate", "unused")  // this is a library offering optional services
-object HexMath {
+object HexMath: HexMathBase {
 
     fun getVectorForAngle(angle: Float): Vector2 {
         return Vector2(sin(angle.toDouble()).toFloat(), cos(angle.toDouble()).toFloat())
@@ -26,11 +36,11 @@ object HexMath {
         if (numberOfTiles < 1) 0f else ((sqrt(12f * numberOfTiles - 3) - 3) / 6)
 
     // In our reference system latitude, i.e. how distant from equator we are, is proportional to x + y
-    fun getLatitude(vector: Vector2): Float {
+    override fun getLatitude(vector: Vector2): Float {
         return vector.x + vector.y
     }
 
-    fun getLongitude(vector: Vector2): Float {
+    override fun getLongitude(vector: Vector2): Float {
         return vector.x - vector.y
     }
 
@@ -138,7 +148,7 @@ object HexMath {
         return cubic2HexCoords(roundCubicCoords(hex2CubicCoords(hexCoord)))
     }
 
-    fun getVectorsAtDistance(origin: Vector2, distance: Int, maxDistance: Int, worldWrap: Boolean): List<Vector2> {
+    override fun getVectorsAtDistance(origin: Vector2, distance: Int, maxDistance: Int, worldWrap: Boolean): List<Vector2> {
         val vectors = mutableListOf<Vector2>()
         if (distance == 0) {
             vectors += origin.cpy()
@@ -165,12 +175,16 @@ object HexMath {
         return vectors
     }
 
-    fun getVectorsInDistance(origin: Vector2, distance: Int, worldWrap: Boolean): List<Vector2> {
+    override fun getVectorsInDistanceRange(origin: Vector2, range: IntRange, worldWrap: Boolean): List<Vector2> {
         val hexesToReturn = mutableListOf<Vector2>()
-        for (i in 0..distance) {
-            hexesToReturn += getVectorsAtDistance(origin, i, distance, worldWrap)
+        for (i in range) {
+            hexesToReturn += getVectorsAtDistance(origin, i, range.last, worldWrap)
         }
         return hexesToReturn
+    }
+
+    override fun getVectorsInDistance(origin: Vector2, distance: Int, worldWrap: Boolean): List<Vector2> {
+        return getVectorsInDistanceRange(origin, 0..distance, worldWrap)
     }
 
     fun getDistance(origin: Vector2, destination: Vector2): Int {
@@ -194,4 +208,35 @@ object HexMath {
 
     fun getClockDirectionToWorldVector(clockDirection: Int): Vector2 =
         clockToWorldVectors[clockDirection] ?: Vector2.Zero
+
+    override fun getNeighborTileClockPosition(position: Vector2, otherPosition: Vector2, radius: Int): Int {
+        val xDifference = position.x - otherPosition.x
+        val yDifference = position.y - otherPosition.y
+        val xWrapDifferenceBottom = position.x - (otherPosition.x - radius)
+        val yWrapDifferenceBottom = position.y - (otherPosition.y - radius)
+        val xWrapDifferenceTop = position.x - (otherPosition.x + radius)
+        val yWrapDifferenceTop = position.y - (otherPosition.y + radius)
+
+        return when {
+            xDifference == 1f && yDifference == 1f -> 6 // otherTile is below
+            xDifference == -1f && yDifference == -1f -> 12 // otherTile is above
+            xDifference == 1f || xWrapDifferenceBottom == 1f -> 4 // otherTile is bottom-right
+            yDifference == 1f || yWrapDifferenceBottom == 1f -> 8 // otherTile is bottom-left
+            xDifference == -1f || xWrapDifferenceTop == -1f -> 10 // otherTile is top-left
+            yDifference == -1f || yWrapDifferenceTop == -1f -> 2 // otherTile is top-right
+            else -> -1
+        }
+    }
+
+    override fun getNeighborInClockDirection(position: Vector2, clockDirection: Int): Vector2? {
+        return when (clockDirection) {
+            2 -> Vector2(0f, 1f)
+            4 -> Vector2(-1f, 0f)
+            6 -> Vector2(-1f, -1f)
+            8 -> Vector2(0f, -1f)
+            10 -> Vector2(1f, 0f)
+            12 -> Vector2(1f, 1f)
+            else -> null
+        }?.add(position)
+    }
 }

@@ -152,8 +152,6 @@ class HexMath3DTests {
         // The exact distance on the icosahedron surface, before projecting onto the sphere
         val expectedDistance = 2f / edgeLength
 
-        // Allow up to 30% variation in distance after projecting onto the sphere.
-        val margin = 0.3f
         // Allow up to 60% variation between neighbours, since they may be adjacent when
         // encircling a vertex
         val wideMargin = 0.6f
@@ -170,5 +168,64 @@ class HexMath3DTests {
                 checkDistance(hexMap, expectedDistance, wideMargin, neighbourCoords, nextNeighbourCoords)
             }
         }
+    }
+
+    private fun checkListsContainSameElements(left: List<Vector2>, right: List<Vector2>) {
+        val leftSorted = left.sortedWith(compareBy<Vector2> { it.x }.thenBy { it.y })
+        val rightSorted = right.sortedWith(compareBy<Vector2> { it.x }.thenBy { it.y })
+        Assert.assertTrue(leftSorted == rightSorted)
+    }
+
+    /**
+     * Check method for finding tiles a given distance away
+     */
+    @Test
+    fun vectorsAtDistance() {
+        val edgeLength = 3
+        val hexMap = HexMath3D(nTilesForEdgeLength(edgeLength))
+
+        val origin = Vector2(5f, 3f)
+        val actualZeroAway = hexMap.getVectorsAtDistance(origin, 0, 10, false)
+        checkListsContainSameElements(listOf(origin), actualZeroAway)
+        val actualUptoZero = hexMap.getVectorsInDistance(origin, 0, false)
+        checkListsContainSameElements(listOf(origin), actualUptoZero)
+
+        val expectedOneAway = listOf(
+                Vector2(6f, 3f),
+                Vector2(6f, 2f),
+                Vector2(6f, 4f),
+                Vector2(5f, 4f),
+                Vector2(4f, 3f),
+                Vector2(4f, 2f),
+        )
+        val actualOneAway = hexMap.getVectorsAtDistance(origin, 1, 10, false)
+        checkListsContainSameElements(expectedOneAway, actualOneAway)
+        val actualUptoOne = hexMap.getVectorsInDistance(origin, 1, false)
+        checkListsContainSameElements(listOf(origin) + expectedOneAway, actualUptoOne)
+
+        val expectedTwoAway = listOf(
+                Vector2(7f, 3f),
+                Vector2(7f, 4f),
+                Vector2(7f, 5f),
+                Vector2(6f, 5f),
+                Vector2(5f, 5f),
+                Vector2(4f, 4f),
+                Vector2(3f, 3f),
+                Vector2(3f, 2f),
+                Vector2(5f, 0f),
+                Vector2(6f, 1f),
+                Vector2(7f, 2f),
+        )
+        val actualTwoAway = hexMap.getVectorsAtDistance(origin, 2, 10, false)
+        checkListsContainSameElements(expectedTwoAway, actualTwoAway)
+        val actualUptoTwo = hexMap.getVectorsInDistance(origin, 2, false)
+        checkListsContainSameElements(listOf(origin) + expectedOneAway + expectedTwoAway, actualUptoTwo)
+
+        val actualOneToTwo = hexMap.getVectorsInDistanceRange(origin, 1..2, false)
+        checkListsContainSameElements(expectedOneAway + expectedTwoAway, actualOneToTwo)
+        val actualZeroToZero = hexMap.getVectorsInDistanceRange(origin, 0..0, false)
+        checkListsContainSameElements(listOf(origin), actualZeroToZero)
+        val actualInvalidRange = hexMap.getVectorsInDistanceRange(origin, 2..1, false)
+        checkListsContainSameElements(emptyList<Vector2>(), actualInvalidRange)
     }
 }
