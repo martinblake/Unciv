@@ -239,6 +239,7 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
     var cameraScale = defaultCameraScale
 
     val atlas = TextureAtlas("game.atlas")
+
     val texture = Texture("game.png")
 
     private val mirrorTileGroups = HashMap<TileInfo, Pair<T, T>>()
@@ -261,12 +262,13 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
         setCameraPosition(cameraLatitude, cameraLongitude, cameraScale)
         sphere = createModelInstance()
 
-        val material = sphere.materials.get(0)
-        material.set(
-                TextureAttribute(TextureAttribute.Diffuse, texture),
-                BlendingAttribute(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA),
-                FloatAttribute(FloatAttribute.AlphaTest, 0.1f),
-        )
+        for (material in sphere.materials) {
+            material.set(
+                    TextureAttribute(TextureAttribute.Diffuse, texture),
+                    BlendingAttribute(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA),
+                    FloatAttribute(FloatAttribute.AlphaTest, 0.1f),
+            )
+        }
 
         modelBatch = ModelBatch()
     }
@@ -275,13 +277,13 @@ class TileGroupMap3D<T : TileGroup>(private val tileGroups: Collection<T>, priva
         val modelBuilder = ModelBuilder()
 
         modelBuilder.begin()
-        var meshBuilder = modelBuilder.part(
-                "tiledSphere",
-                GL20.GL_TRIANGLES,
-                (Usage.Position or Usage.TextureCoordinates).toLong(),
-                Material()
-        )
         for(tileGroup in tileGroups.reversed()) {
+            val meshBuilder = modelBuilder.part(
+                    "tile_${tileGroup.tileInfo.position.x}_${tileGroup.tileInfo.position.y}",
+                    GL20.GL_TRIANGLES,
+                    (Usage.Position or Usage.TextureCoordinates).toLong(),
+                    Material()
+            )
             val hexMap = tileGroup.tileInfo.tileMap.hexMath3d
             val tileMesh = HexagonalTileMesh(hexMap, tileGroup.tileInfo.position)
             val locations = tileGroup.getTileBaseImageLocations(null)
