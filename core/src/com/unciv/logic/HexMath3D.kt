@@ -644,7 +644,7 @@ class HexMath3D(nTilesApprox: Int): HexMathBase {
         return addVector(hexCoords, Vector2(dx, dy))
     }
 
-    fun neighbouringHexCoords(hexCoords: Vector2): List<Vector2> {
+    fun neighboringHexCoords(hexCoords: Vector2): List<Vector2> {
         return listOf(
                 Vector2(1f, 0f),
                 Vector2(1f, 1f),
@@ -652,19 +652,6 @@ class HexMath3D(nTilesApprox: Int): HexMathBase {
                 Vector2(-1f, 0f),
                 Vector2(-1f, -1f),
                 Vector2(0f, -1f)
-        ).map {
-            addVector(hexCoords, it)
-        }.filterNotNull()
-    }
-
-    fun outerNeighbouringHexCoords(hexCoords: Vector2): List<Vector2> {
-        return listOf(
-                Vector2(2f, 1f),
-                Vector2(1f, 2f),
-                Vector2(-1f, 1f),
-                Vector2(-2f, -1f),
-                Vector2(-1f, -2f),
-                Vector2(1f, -1f),
         ).map {
             addVector(hexCoords, it)
         }.filterNotNull()
@@ -684,7 +671,7 @@ class HexMath3D(nTilesApprox: Int): HexMathBase {
         for (i in 0 until distance) {
             vectorsWithinDistance += vectorsAtDistance
             vectorsAtDistance = vectorsAtDistance.flatMap {
-                neighbouringHexCoords(it)
+                neighboringHexCoords(it)
 
             }.filter {
                 !vectorsWithinDistance.contains(it)
@@ -703,7 +690,7 @@ class HexMath3D(nTilesApprox: Int): HexMathBase {
                 vectorsInDistanceRange += vectorsAtDistance
             }
             vectorsAtDistance = vectorsAtDistance.flatMap {
-                neighbouringHexCoords(it)
+                neighboringHexCoords(it)
             }.filter {
                 !vectorsWithinDistance.contains(it)
             }.distinct()

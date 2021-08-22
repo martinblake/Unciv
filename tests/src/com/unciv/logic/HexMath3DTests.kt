@@ -75,7 +75,7 @@ class HexMath3DTests {
      * has 5 neighbours
      */
     @Test
-    fun numNeighbours() {
+    fun numNeighbors() {
         val edgeLength = 3
 
         val vertexCoords: List<Pair<Int, Int>> = listOf(
@@ -92,13 +92,13 @@ class HexMath3DTests {
             val isVertexCoord = vertexCoords.any {
                 (x, y) -> (x == coords.x.roundToInt()) && (y == coords.y.roundToInt())
             }
-            val expectedNumNeighbours = if (isVertexCoord) 5 else 6
+            val expectedNumNeighbors = if (isVertexCoord) 5 else 6
 
-            val neighbours = hexMap.neighbouringHexCoords(coords)
+            val neighbors = hexMap.neighboringHexCoords(coords)
             Assert.assertEquals(
-                    "Incorrect number of neighbours for point ${coords}",
-                    expectedNumNeighbours,
-                    neighbours.size
+                    "Incorrect number of neighbors for point ${coords}",
+                    expectedNumNeighbors,
+                    neighbors.size
             )
         }
     }
@@ -132,40 +132,12 @@ class HexMath3DTests {
         val testCoords = hexMap.getAllVectors()
 
         for (coords in testCoords) {
-            val neighbourCoordsList = hexMap.neighbouringHexCoords(coords)
-            for ((i, neighbourCoords) in neighbourCoordsList.withIndex()) {
-                val nextNeighbourCoords = neighbourCoordsList[(i + 1) % neighbourCoordsList.size]
+            val neighborCoordsList = hexMap.neighboringHexCoords(coords)
+            for ((i, neighborCoords) in neighborCoordsList.withIndex()) {
+                val nextNeighborCoords = neighborCoordsList[(i + 1) % neighborCoordsList.size]
 
-                checkDistance(hexMap, expectedDistance, margin, coords, neighbourCoords)
-                checkDistance(hexMap, expectedDistance, margin, neighbourCoords, nextNeighbourCoords)
-            }
-        }
-    }
-
-    /**
-     * Check that the distances between outer adjacent tiles are approximately correct
-     */
-    @Test
-    fun tileSeparationOuter() {
-        val edgeLength = 3
-
-        // The exact distance on the icosahedron surface, before projecting onto the sphere
-        val expectedDistance = 2f / edgeLength
-
-        // Allow up to 60% variation between neighbours, since they may be adjacent when
-        // encircling a vertex
-        val wideMargin = 0.6f
-
-        val hexMap = HexMath3D(nTilesForEdgeLength(edgeLength))
-        val testCoords = hexMap.getAllVectors()
-
-        for (coords in testCoords) {
-            val neighbourCoordsList = hexMap.outerNeighbouringHexCoords(coords)
-            for ((i, neighbourCoords) in neighbourCoordsList.withIndex()) {
-                val nextNeighbourCoords = neighbourCoordsList[(i + 1) % neighbourCoordsList.size]
-
-                checkDistance(hexMap, expectedDistance, wideMargin, coords, neighbourCoords)
-                checkDistance(hexMap, expectedDistance, wideMargin, neighbourCoords, nextNeighbourCoords)
+                checkDistance(hexMap, expectedDistance, margin, coords, neighborCoords)
+                checkDistance(hexMap, expectedDistance, margin, neighborCoords, nextNeighborCoords)
             }
         }
     }
