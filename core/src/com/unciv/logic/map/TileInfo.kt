@@ -159,9 +159,11 @@ open class TileInfo {
     // This is for performance - since we access the neighbors of a tile ALL THE TIME,
     // and the neighbors of a tile never change, it's much more efficient to save the list once and for all!
     @delegate:Transient
-    val neighbors: Sequence<TileInfo> by lazy { getTilesAtDistance(1).toList().asSequence() }
-    // We have to .toList() so that the values are stored together once for caching,
-    // and the toSequence so that aggregations (like neighbors.flatMap{it.units} don't take up their own space
+    val neighbors: Sequence<TileInfo> by lazy {
+        tileMap.hexMath.getVectorsAtDistance(position, 1, 1, false).asSequence().map {
+            tileMap.getIfTileExistsOrNull(it.x.toInt(), it.y.toInt())
+        }.filterNotNull()
+    }
 
     fun getHeight(): Int {
         return getAllTerrains().flatMap { it.uniqueObjects }

@@ -52,7 +52,7 @@ class RiverGenerator(val randomness: MapGenerationRandomness) {
 
 
         while (getAdjacentTiles(riverCoordinate, map).none { it.isWater }) {
-            val possibleCoordinates = riverCoordinate.getAdjacentPositions()
+            val possibleCoordinates = riverCoordinate.getAdjacentPositions(map)
                     .filter { map.contains(it.position) }
             if (possibleCoordinates.none()) return // end of the line
             val newCoordinate = possibleCoordinates

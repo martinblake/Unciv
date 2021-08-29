@@ -130,24 +130,47 @@ class TileMap {
     }
 
     fun getTilesInDistance(origin: Vector2, distance: Int): Sequence<TileInfo> {
-        return hexMath.getVectorsInDistance(origin, distance, false).asSequence().map {
-            getIfTileExistsOrNull(it.x.toInt(), it.y.toInt())
-        }.filterNotNull()
+        return getTilesInDistanceRange(origin, 0..distance)
     }
 
     fun getTilesInDistanceRange(origin: Vector2, range: IntRange): Sequence<TileInfo> {
-        return hexMath.getVectorsInDistanceRange(origin, range, false).asSequence().map {
-            getIfTileExistsOrNull(it.x.toInt(), it.y.toInt())
-        }.filterNotNull()
+        val originTile = getIfTileExistsOrNull(origin.x.toInt(), origin.y.toInt())!!
+        var tilesWithinDistance = mutableListOf<TileInfo>()
+        var tilesInDistanceRange = mutableListOf<TileInfo>()
+        var tilesAtDistance = listOf(originTile)
+        for (i in 0 until range.last) {
+            tilesWithinDistance.plusAssign(tilesAtDistance)
+            if (i >= range.first) {
+                tilesInDistanceRange.plusAssign(tilesAtDistance)
+            }
+            tilesAtDistance = tilesAtDistance.flatMap {
+                it.neighbors
+            }.filter {
+                !tilesWithinDistance.contains(it)
+            }.distinct()
+        }
+        if (range.last >= range.first) {
+            tilesInDistanceRange.plusAssign(tilesAtDistance)
+        }
+        return tilesInDistanceRange.asSequence()
     }
 
     fun getTilesAtDistance(origin: Vector2, distance: Int): Sequence<TileInfo> {
-        return hexMath.getVectorsAtDistance(origin, distance, distance, false).asSequence().map {
-            getIfTileExistsOrNull(it.x.toInt(), it.y.toInt())
-        }.filterNotNull()
+        val originTile = getIfTileExistsOrNull(origin.x.toInt(), origin.y.toInt())!!
+        var tilesWithinDistance = mutableListOf<TileInfo>()
+        var tilesAtDistance = listOf(originTile)
+        for (i in 0 until distance) {
+            tilesWithinDistance.plusAssign(tilesAtDistance)
+            tilesAtDistance = tilesAtDistance.flatMap {
+                it.neighbors
+            }.filter {
+                !tilesWithinDistance.contains(it)
+            }.distinct()
+        }
+        return tilesAtDistance.asSequence()
     }
 
-    private fun getIfTileExistsOrNull(x: Int, y: Int): TileInfo? {
+    fun getIfTileExistsOrNull(x: Int, y: Int): TileInfo? {
         if (contains(x, y))
             return get(x, y)
 

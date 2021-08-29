@@ -535,19 +535,27 @@ class RiverCoordinate(val position: Vector2, val bottomRightOrLeft: BottomRightO
         BottomRight
     }
 
-    fun getAdjacentPositions(): Sequence<RiverCoordinate> {
+    fun getAdjacentPositions(map: TileMap): Sequence<RiverCoordinate> {
         // What's nice is that adjacents are always the OPPOSITE in terms of right-left - rights are adjacent to only lefts, and vice-versa
         // This means that a lot of obviously-wrong assignments are simple to spot
         return if (bottomRightOrLeft == BottomRightOrLeft.BottomLeft) {
             sequenceOf(RiverCoordinate(position, BottomRightOrLeft.BottomRight), // same tile, other side
-                RiverCoordinate(position.cpy().add(1f, 0f), BottomRightOrLeft.BottomRight), // tile to MY top-left, take its bottom right corner
-                RiverCoordinate(position.cpy().add(0f, -1f), BottomRightOrLeft.BottomRight) // Tile to MY bottom-left, take its bottom right
-            )
+                    map.hexMath.getNeighborInClockDirection(position, 10)?.let {
+                        RiverCoordinate(it, BottomRightOrLeft.BottomRight)
+                    },
+                    map.hexMath.getNeighborInClockDirection(position, 8)?.let {
+                        RiverCoordinate(it, BottomRightOrLeft.BottomRight)
+                    }
+            ).filterNotNull()
         } else {
             sequenceOf(RiverCoordinate(position, BottomRightOrLeft.BottomLeft), // same tile, other side
-                RiverCoordinate(position.cpy().add(0f, 1f), BottomRightOrLeft.BottomLeft), // tile to MY top-right, take its bottom left
-                RiverCoordinate(position.cpy().add(-1f, 0f), BottomRightOrLeft.BottomLeft)  // tile to MY bottom-right, take its bottom left
-            )
+                    map.hexMath.getNeighborInClockDirection(position, 2)?.let {
+                        RiverCoordinate(it, BottomRightOrLeft.BottomLeft)
+                    },
+                    map.hexMath.getNeighborInClockDirection(position, 4)?.let {
+                        RiverCoordinate(it, BottomRightOrLeft.BottomLeft)
+                    }
+            ).filterNotNull()
         }
     }
 }

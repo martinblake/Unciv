@@ -122,9 +122,9 @@ class HexagonalTileMesh(private val hexMap: HexMath3D, private val hexCoords: Ve
                         pCenter,
                         pTop,
                         linearAverage(p5, p7),
-                        p3.cpy().lerp(pTop, 2f / 3f),
+                        p3.cpy().lerp(pTop, 1f / 2f),
                         p3, p5, p7, p9,
-                        p9.cpy().lerp(pTop, 2f / 3f)
+                        p9.cpy().lerp(pTop, 1f / 2f)
                 )
             }
             (p6 == null) -> {
@@ -139,8 +139,8 @@ class HexagonalTileMesh(private val hexMap: HexMath3D, private val hexCoords: Ve
                         linearAverage(p1, p11),
                         pBottom,
                         p1, p3,
-                        p3.cpy().lerp(pBottom, 2f / 3f),
-                        p9.cpy().lerp(pBottom, 2f / 3f),
+                        p3.cpy().lerp(pBottom, 1f / 2f),
+                        p9.cpy().lerp(pBottom, 1f / 2f),
                         p9, p11
                 )
             }
