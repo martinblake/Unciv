@@ -195,7 +195,7 @@ class WorldScreen(val gameInfo: GameInfo, val viewingCiv:CivilizationInfo) : Bas
             // isDaemon = true, in order to not block the app closing
             // DO NOT use Timer() since this seems to (maybe?) translate to com.badlogic.gdx.utils.Timer? Not sure about this.
             multiPlayerRefresher = timer("multiPlayerRefresh", true, period = 10000) {
-                loadLatestMultiplayerState()
+                // loadLatestMultiplayerState()
             }
         }
 
@@ -715,7 +715,11 @@ class WorldScreen(val gameInfo: GameInfo, val viewingCiv:CivilizationInfo) : Bas
         nextTurnButton.setText(action.text.tr())
         nextTurnButton.label.color = action.color
         nextTurnButton.pack()
-        nextTurnButton.isEnabled = !isSomethingOpen && isPlayersTurn && !waitingForAutosave
+        nextTurnButton.isEnabled = (
+            !isSomethingOpen
+                && (isPlayersTurn || gameInfo.gameParameters.isOnlineMultiplayer)
+                && !waitingForAutosave
+        )
         nextTurnButton.setPosition(stage.width - nextTurnButton.width - 10f, topBar.y - nextTurnButton.height - 10f)
     }
 
@@ -725,13 +729,20 @@ class WorldScreen(val gameInfo: GameInfo, val viewingCiv:CivilizationInfo) : Bas
      */
     fun enableNextTurnButtonAfterOptions() {
         mapHolder.reloadMaxZoom()
-        nextTurnButton.isEnabled = isPlayersTurn && !waitingForAutosave
+        nextTurnButton.isEnabled = (
+            (isPlayersTurn || gameInfo.gameParameters.isOnlineMultiplayer)
+                && !waitingForAutosave
+        )
     }
 
     private fun getNextTurnAction(): NextTurnAction {
         return when {
             !isPlayersTurn && gameInfo.gameParameters.isOnlineMultiplayer ->
-                NextTurnAction("Waiting for [${gameInfo.currentPlayerCiv}]...", Color.GRAY) {}
+                NextTurnAction("Update game state", Color.GRAY) {
+                    nextTurnButton.disable()
+                    loadLatestMultiplayerState()
+                    nextTurnButton.enable()
+                }
             !isPlayersTurn && !gameInfo.gameParameters.isOnlineMultiplayer ->
                 NextTurnAction("Waiting for other players...",Color.GRAY) {}
 
